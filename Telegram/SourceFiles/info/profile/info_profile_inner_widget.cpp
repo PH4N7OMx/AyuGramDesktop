@@ -99,15 +99,9 @@ void AddSavedMusic(
 		anim::type::instant);
 	wrap->entity()->heightValue(
 	) | rpl::on_next([layout] {
-		layout->resizeToWidth(layout->width());
-		for (auto p = layout->parentWidget(); p; p = p->parentWidget()) {
-			if (const auto rp = qobject_cast<Ui::RpWidget*>(p)) {
-				rp->resizeToWidth(rp->width());
-			} else {
-				p->resize(p->width(), p->height());
-			}
-		}
-		Ui::SendPendingMoveResizeEvents(layout->window());
+		crl::on_main(layout, [layout] {
+			layout->resizeToWidth(layout->width());
+		});
 	}, wrap->lifetime());
 }
 
