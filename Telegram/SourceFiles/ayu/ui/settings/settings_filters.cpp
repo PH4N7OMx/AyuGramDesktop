@@ -150,6 +150,7 @@ void BuildGlobalFilters(SectionBuilder &builder) {
 		}) | on_next([=](bool enabled) {
 			AyuSettings::getInstance().setCollapseDuplicates(enabled);
 		}, collapseButton->lifetime());
+		AyuSectionBuilder(builder).addBetaBadge(collapseButton);
 	}
 
 	const auto controller = builder.controller();

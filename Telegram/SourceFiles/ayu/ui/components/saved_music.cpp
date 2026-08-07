@@ -193,6 +193,11 @@ AyuMusicButton::AyuMusicButton(
 	  , _overrideBg(overrideBg) {
 	_performerText = data.performer;
 	_titleText = data.title;
+	_currentCover = ResultCover{
+		.pix = QPixmap(),
+		.bg = GetNoCoverBgColor(overrideBg),
+		.noCover = true,
+	};
 	rpl::combine(
 		_title->naturalWidthValue(),
 		_performer->naturalWidthValue()
