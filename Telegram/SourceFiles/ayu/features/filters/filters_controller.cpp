@@ -173,28 +173,27 @@ const HistoryItem *getPreviousNonService(const not_null<HistoryItem*> item) {
 	const auto history = item->history();
 	const auto &blocks = history->blocks;
 	bool foundSelf = false;
-	const HistoryItem *lastNonServiceInBlocks = nullptr;
 
 	for (auto bIt = blocks.rbegin(); bIt != blocks.rend(); ++bIt) {
 		const auto &msgs = (*bIt)->messages;
 		for (auto mIt = msgs.rbegin(); mIt != msgs.rend(); ++mIt) {
 			const auto data = (*mIt)->data();
+			if (!data) {
+				continue;
+			}
 			if (data == item) {
 				foundSelf = true;
 				continue;
 			}
-			if (data == s_removingItem || data->isService()) {
-				continue;
-			}
-			if (!lastNonServiceInBlocks) {
-				lastNonServiceInBlocks = data;
-			}
 			if (foundSelf) {
+				if (data == s_removingItem || data->isService()) {
+					continue;
+				}
 				return data;
 			}
 		}
 	}
-	return foundSelf ? nullptr : lastNonServiceInBlocks;
+	return nullptr;
 }
 
 const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
@@ -231,33 +230,11 @@ const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
 	return head;
 }
 
-void notifyDuplicateHead(
-		not_null<const HistoryItem*> duplicateItem,
-		not_null<const HistoryItem*> headItem) {
-	if (notifiedDuplicates.contains(duplicateItem)) {
-		return;
-	}
-	if (notifiedDuplicates.size() > 2000) {
-		notifiedDuplicates.clear();
-	}
-	notifiedDuplicates.insert(duplicateItem);
-
-	const auto headPtr = const_cast<HistoryItem*>(headItem.get());
-	crl::on_main([=] {
-		headPtr->history()->owner().requestItemViewRefresh(headPtr);
-	});
-}
-
 bool isDuplicateMessage(const not_null<HistoryItem*> item) {
 	if (item.get() == s_removingItem || !AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
 		return false;
 	}
-	const auto head = getDuplicateHead(item);
-	if (!head) {
-		return false;
-	}
-	notifyDuplicateHead(item, head);
-	return true;
+	return (getDuplicateHead(item) != nullptr);
 }
 
 std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> item) {
