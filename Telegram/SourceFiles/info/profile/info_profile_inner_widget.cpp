@@ -88,7 +88,6 @@ void AddSavedMusic(
 		object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
 			layout,
 			object_ptr<Ui::VerticalLayout>(layout)));
-	wrap->show(anim::type::instant);
 	Info::Saved::SetupSavedMusic(
 		wrap->entity(),
 		controller,
@@ -98,12 +97,6 @@ void AddSavedMusic(
 	wrap->toggleOn(
 		wrap->entity()->heightValue() | rpl::map(_1 > 0),
 		anim::type::instant);
-	wrap->entity()->heightValue(
-	) | rpl::on_next([layout] {
-		crl::on_main(layout, [layout] {
-			layout->resizeToWidth(layout->width());
-		});
-	}, wrap->lifetime());
 }
 
 void AddAboutVerification(
