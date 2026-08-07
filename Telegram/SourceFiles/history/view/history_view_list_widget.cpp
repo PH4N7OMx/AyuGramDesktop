@@ -5117,6 +5117,7 @@ void ListWidget::itemRemoved(not_null<const HistoryItem*> item) {
 		_thanosController->captureOnRemoval(item);
 	}
 
+	const auto savedVisibleTop = _visibleTop;
 	saveScrollState();
 	const auto guard = gsl::finally([&] {
 		restoreScrollState();
@@ -5126,29 +5127,11 @@ void ListWidget::itemRemoved(not_null<const HistoryItem*> item) {
 
 	const HistoryItem *nextHead = nullptr;
 	if (AyuSettings::getInstance().collapseDuplicates() && !item->isService()) {
-		const auto &text = item->originalText().text;
+		const QString text = item->originalText().text;
 		if (!text.isEmpty()) {
-			const auto history = item->history();
-			bool foundSelf = false;
-			for (const auto &block : history->blocks) {
-				for (const auto &element : block->messages) {
-					const auto nextData = element->data();
-					if (nextData == item) {
-						foundSelf = true;
-						continue;
-					}
-					if (!foundSelf || nextData->isService()) {
-						continue;
-					}
-					if (nextData->from() == item->from()
-						&& nextData->originalText().text == text) {
-						nextHead = nextData;
-						break;
-					} else if (foundSelf) {
-						break;
-					}
-				}
-				if (nextHead) break;
+			const auto dupes = FiltersController::getDuplicateGroup(const_cast<HistoryItem*>(item.get()));
+			if (!dupes.empty() && dupes.front() == item && dupes.size() > 1) {
+				nextHead = dupes[1];
 			}
 		}
 	}
@@ -5175,6 +5158,9 @@ void ListWidget::itemRemoved(not_null<const HistoryItem*> item) {
 		_replyButtonManager->remove(item->fullId());
 	}
 	updateItemsGeometry();
+	if (nextHead) {
+		_delegate->listScrollTo(savedVisibleTop);
+	}
 }
 
 QPoint ListWidget::mapPointToItem(

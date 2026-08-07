@@ -196,7 +196,7 @@ const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
 	if (!AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
 		return nullptr;
 	}
-	const auto &text = item->originalText().text;
+	const QString text = item->originalText().text;
 	if (text.isEmpty()) {
 		return nullptr;
 	}
@@ -252,48 +252,13 @@ bool isDuplicateMessage(const not_null<HistoryItem*> item) {
 	return true;
 }
 
-int countDuplicateGroupSize(const not_null<HistoryItem*> item) {
-	if (!AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
-		return 1;
-	}
-	const auto &text = item->originalText().text;
-	if (text.isEmpty()) {
-		return 1;
-	}
-
-	int count = 1;
-	const auto history = item->history();
-	const auto &blocks = history->blocks;
-	bool foundSelf = false;
-
-	for (const auto &block : blocks) {
-		for (const auto &element : block->messages) {
-			const auto nextData = element->data();
-			if (nextData == item) {
-				foundSelf = true;
-				continue;
-			}
-			if (!foundSelf || nextData->isService()) {
-				continue;
-			}
-			if (nextData->from() == item->from()
-				&& nextData->originalText().text == text) {
-				count++;
-			} else {
-				return count;
-			}
-		}
-	}
-	return count;
-}
-
 std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> item) {
 	std::vector<not_null<HistoryItem*>> result;
 	if (!AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
 		result.push_back(item);
 		return result;
 	}
-	const auto &text = item->originalText().text;
+	const QString text = item->originalText().text;
 	if (text.isEmpty()) {
 		result.push_back(item);
 		return result;
@@ -305,28 +270,51 @@ std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> ite
 	result.push_back(realHead);
 
 	const auto history = realHead->history();
-	const auto &blocks = history->blocks;
-	bool foundHead = false;
+	const auto peerId = history->peer->id;
+	const auto &owner = history->owner();
 
-	for (const auto &block : blocks) {
-		for (const auto &element : block->messages) {
-			const auto nextData = element->data();
-			if (nextData == realHead) {
-				foundHead = true;
-				continue;
-			}
-			if (!foundHead || nextData->isService()) {
-				continue;
-			}
-			if (nextData->from() == realHead->from()
-				&& nextData->originalText().text == text) {
-				result.push_back(nextData);
-			} else if (foundHead) {
-				return result;
+	if (realHead->id > 0) {
+		for (auto id = realHead->id + 1; id <= realHead->id + 200; ++id) {
+			if (const auto next = owner.message(peerId, id)) {
+				if (next->isService()) {
+					continue;
+				}
+				if (next->from() == realHead->from() && next->originalText().text == text) {
+					result.push_back(next);
+				} else {
+					break;
+				}
 			}
 		}
 	}
+
+	if (result.size() == 1) {
+		const auto &blocks = history->blocks;
+		bool foundHead = false;
+		for (const auto &block : blocks) {
+			for (const auto &element : block->messages) {
+				const auto nextData = element->data();
+				if (nextData == realHead) {
+					foundHead = true;
+					continue;
+				}
+				if (!foundHead || nextData->isService()) {
+					continue;
+				}
+				if (nextData->from() == realHead->from() && nextData->originalText().text == text) {
+					result.push_back(nextData);
+				} else if (foundHead) {
+					break;
+				}
+			}
+		}
+	}
+
 	return result;
+}
+
+int countDuplicateGroupSize(const not_null<HistoryItem*> item) {
+	return static_cast<int>(getDuplicateGroup(item).size());
 }
 
 void handleDuplicateItemRemoved(not_null<const HistoryItem*> item) {
@@ -340,7 +328,7 @@ void handleDuplicateItemRemoved(not_null<const HistoryItem*> item) {
 			headPtr->history()->owner().requestItemViewRefresh(headPtr);
 		});
 	} else {
-		const auto &text = item->originalText().text;
+		const QString text = item->originalText().text;
 		if (text.isEmpty()) {
 			return;
 		}
