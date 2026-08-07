@@ -68,6 +68,7 @@ void SetupSavedMusic(
 		object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
 			container,
 			object_ptr<Ui::VerticalLayout>(container)));
+	divider->show(anim::type::instant);
 
 	rpl::combine(
 		std::move(musicValue),
@@ -93,8 +94,7 @@ void SetupSavedMusic(
 							window->showSection(Info::Saved::MakeMusic(peer));
 						})));
 
-				musicButton->hide(anim::type::instant);
-				musicButton->setDuration(250);
+				musicButton->show(anim::type::instant);
 				musicButton->entity()->setAcceptBoth(true);
 				musicButton->entity()->clicks() | rpl::filter([=](Qt::MouseButton mouseButton)
 				{
@@ -137,23 +137,17 @@ void SetupSavedMusic(
 				musicButton->entity()->onReady() | rpl::on_next(
 					[=]
 					{
-						// fix animation glitch
-						dispatchToMainThread(
-							[=]
-							{
-								if (const auto strong = weak.get()) {
-									strong->show(anim::type::normal);
-									container->resizeToWidth(container->width());
-								}
-							},
-							st::widgetFadeDuration);
+						if (const auto strong = weak.get()) {
+							strong->show(anim::type::instant);
+							container->resizeToWidth(container->width());
+						}
 					},
 					musicButton->lifetime());
 			}
-			divider->toggle(true, anim::type::normal);
+			divider->show(anim::type::instant);
 			container->resizeToWidth(container->width());
 		}
-	}, container->lifetime());
+	}, divider->lifetime());
 	divider->finishAnimating();
 }
 

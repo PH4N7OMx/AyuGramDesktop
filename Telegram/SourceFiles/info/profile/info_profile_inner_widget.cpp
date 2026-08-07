@@ -88,6 +88,7 @@ void AddSavedMusic(
 		object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
 			layout,
 			object_ptr<Ui::VerticalLayout>(layout)));
+	wrap->show(anim::type::instant);
 	Info::Saved::SetupSavedMusic(
 		wrap->entity(),
 		controller,
