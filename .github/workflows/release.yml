@@ -152,6 +152,8 @@ jobs:
             sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           fi
           xcodebuild -version
+          brew unlink ca-certificates || true
+          brew link --overwrite ca-certificates || true
           brew install ninja nasm yasm pkg-config cmake autoconf automake libtool meson wget gperf ccache
           echo "CCACHE_DIR=$RUNNER_TEMP/.tdesktop-cache" >> $GITHUB_ENV
 
