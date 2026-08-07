@@ -5117,9 +5117,13 @@ void ListWidget::itemRemoved(not_null<const HistoryItem*> item) {
 		_thanosController->captureOnRemoval(item);
 	}
 
+	const auto savedTop = _visibleTop;
 	saveScrollState();
 	const auto guard = gsl::finally([&] {
 		restoreScrollState();
+		if (AyuSettings::getInstance().collapseDuplicates()) {
+			_delegate->listScrollTo(savedTop);
+		}
 	});
 
 	const auto view = i->second.get();

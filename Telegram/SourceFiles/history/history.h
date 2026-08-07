@@ -491,6 +491,7 @@ public:
 
 	// Still public data.
 	std::deque<std::unique_ptr<HistoryBlock>> blocks;
+	[[nodiscard]] const std::unordered_set<std::unique_ptr<HistoryItem>> &items() const { return _items; }
 
 	// we save the last showAtMsgId to restore the state when switching
 	// between different conversation histories

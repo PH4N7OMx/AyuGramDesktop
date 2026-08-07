@@ -169,31 +169,23 @@ const HistoryItem *removingItem() {
 	return s_removingItem;
 }
 
-const HistoryItem *getPreviousNonService(const not_null<HistoryItem*> item) {
-	const auto history = item->history();
-	const auto &blocks = history->blocks;
-	bool foundSelf = false;
-
-	for (auto bIt = blocks.rbegin(); bIt != blocks.rend(); ++bIt) {
-		const auto &msgs = (*bIt)->messages;
-		for (auto mIt = msgs.rbegin(); mIt != msgs.rend(); ++mIt) {
-			const auto data = (*mIt)->data();
-			if (!data) {
-				continue;
-			}
-			if (data == item) {
-				foundSelf = true;
-				continue;
-			}
-			if (foundSelf) {
-				if (data == s_removingItem || data->isService()) {
-					continue;
-				}
-				return data;
-			}
+std::vector<not_null<HistoryItem*>> getSortedHistoryItems(not_null<History*> history) {
+	std::vector<not_null<HistoryItem*>> list;
+	list.reserve(history->items().size());
+	for (const auto &it : history->items()) {
+		const auto item = it.get();
+		if (!item || item == s_removingItem || item->isService()) {
+			continue;
 		}
+		list.push_back(item);
 	}
-	return nullptr;
+	ranges::sort(list, [](not_null<HistoryItem*> a, not_null<HistoryItem*> b) {
+		if (a->id != b->id) {
+			return a->id < b->id;
+		}
+		return a->date() < b->date();
+	});
+	return list;
 }
 
 const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
@@ -205,23 +197,20 @@ const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
 		return nullptr;
 	}
 
-	const auto itemPtr = const_cast<HistoryItem*>(item.get());
-	const auto prev = getPreviousNonService(itemPtr);
-	if (!prev || prev == s_removingItem) {
+	const auto history = item->history();
+	const auto list = getSortedHistoryItems(history);
+	const auto it = ranges::find(list, item.get(), [](not_null<HistoryItem*> i) { return i.get(); });
+	if (it == list.begin() || it == list.end()) {
 		return nullptr;
 	}
 
-	if (prev->from() != item->from() || prev->originalText().text != text) {
-		return nullptr;
-	}
-
-	const HistoryItem *head = prev;
-	while (const auto earlier = getPreviousNonService(const_cast<HistoryItem*>(head))) {
-		if (earlier == s_removingItem) {
-			break;
-		}
-		if (earlier->from() == item->from() && earlier->originalText().text == text) {
-			head = earlier;
+	const HistoryItem *head = nullptr;
+	auto curr = it;
+	while (curr != list.begin()) {
+		--curr;
+		const auto prev = *curr;
+		if (prev->from() == item->from() && prev->originalText().text == text) {
+			head = prev;
 		} else {
 			break;
 		}
@@ -252,46 +241,20 @@ std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> ite
 	const auto head = getDuplicateHead(item);
 	const auto realHead = head ? const_cast<HistoryItem*>(head) : item.get();
 
-	result.push_back(realHead);
-
 	const auto history = realHead->history();
-	const auto peerId = history->peer->id;
-	const auto &owner = history->owner();
-
-	if (realHead->id > 0) {
-		for (auto id = realHead->id + 1; id <= realHead->id + 200; ++id) {
-			if (const auto next = owner.message(peerId, id)) {
-				if (next == s_removingItem || next->isService()) {
-					continue;
-				}
-				if (next->from() == realHead->from() && next->originalText().text == text) {
-					result.push_back(next);
-				} else {
-					break;
-				}
-			}
-		}
+	const auto list = getSortedHistoryItems(history);
+	const auto it = ranges::find(list, realHead, [](not_null<HistoryItem*> i) { return i.get(); });
+	if (it == list.end()) {
+		result.push_back(realHead);
+		return result;
 	}
 
-	if (result.size() == 1) {
-		const auto &blocks = history->blocks;
-		bool foundHead = false;
-		for (const auto &block : blocks) {
-			for (const auto &element : block->messages) {
-				const auto nextData = element->data();
-				if (nextData == realHead) {
-					foundHead = true;
-					continue;
-				}
-				if (!foundHead || nextData == s_removingItem || nextData->isService()) {
-					continue;
-				}
-				if (nextData->from() == realHead->from() && nextData->originalText().text == text) {
-					result.push_back(nextData);
-				} else if (foundHead) {
-					break;
-				}
-			}
+	for (auto curr = it; curr != list.end(); ++curr) {
+		const auto msg = *curr;
+		if (msg->from() == realHead->from() && msg->originalText().text == text) {
+			result.push_back(msg);
+		} else {
+			break;
 		}
 	}
 
@@ -307,49 +270,22 @@ void handleDuplicateItemRemoved(not_null<const HistoryItem*> item) {
 	notifiedDuplicates.remove(item);
 
 	const auto history = item->history();
-	const auto head = getDuplicateHead(item);
-	if (head && head != item.get()) {
-		const auto headPtr = const_cast<HistoryItem*>(head);
+	const auto group = getDuplicateGroup(const_cast<HistoryItem*>(item.get()));
+
+	HistoryItem *nextHead = nullptr;
+	if (!group.empty() && group.front() == item.get() && group.size() > 1) {
+		nextHead = group[1];
+	}
+
+	if (nextHead) {
+		notifiedDuplicates.remove(nextHead);
+		const auto nextHeadPtr = nextHead;
 		crl::on_main([=] {
 			s_removingItem = nullptr;
-			headPtr->history()->owner().requestItemViewRefresh(headPtr);
+			nextHeadPtr->history()->owner().requestItemViewRefresh(nextHeadPtr);
 		});
 	} else {
-		const QString text = item->originalText().text;
-		if (!text.isEmpty()) {
-			const auto &owner = history->owner();
-			const auto peerId = history->peer->id;
-			HistoryItem *nextHead = nullptr;
-
-			if (item->id > 0) {
-				for (auto id = item->id + 1; id <= item->id + 200; ++id) {
-					if (const auto next = owner.message(peerId, id)) {
-						if (next == item.get() || next->isService()) {
-							continue;
-						}
-						if (next->from() == item->from() && next->originalText().text == text) {
-							nextHead = next;
-							break;
-						} else {
-							break;
-						}
-					}
-				}
-			}
-
-			if (nextHead) {
-				notifiedDuplicates.remove(nextHead);
-				const auto nextHeadPtr = nextHead;
-				crl::on_main([=] {
-					s_removingItem = nullptr;
-					nextHeadPtr->history()->owner().requestItemViewRefresh(nextHeadPtr);
-				});
-			} else {
-				crl::on_main([] { s_removingItem = nullptr; });
-			}
-		} else {
-			s_removingItem = nullptr;
-		}
+		crl::on_main([] { s_removingItem = nullptr; });
 	}
 }
 
