@@ -5117,39 +5117,17 @@ void ListWidget::itemRemoved(not_null<const HistoryItem*> item) {
 		_thanosController->captureOnRemoval(item);
 	}
 
-	const auto savedVisibleTop = _visibleTop;
 	saveScrollState();
 	const auto guard = gsl::finally([&] {
 		restoreScrollState();
 	});
 
 	const auto view = i->second.get();
-
-	const HistoryItem *nextHead = nullptr;
-	if (AyuSettings::getInstance().collapseDuplicates() && !item->isService()) {
-		const QString text = item->originalText().text;
-		if (!text.isEmpty()) {
-			const auto dupes = FiltersController::getDuplicateGroup(const_cast<HistoryItem*>(item.get()));
-			if (!dupes.empty() && dupes.front() == item && dupes.size() > 1) {
-				nextHead = dupes[1];
-			}
-		}
-	}
-
-	const auto it = ranges::find(_items, view, [](auto v) { return v.get(); });
-	if (nextHead && it != end(_items)) {
-		const auto nextView = enforceViewForItem(const_cast<HistoryItem*>(nextHead), _viewsCapacity);
-		*it = nextView;
-		viewReplaced(view, nextView.get());
-		_views.erase(i);
-		refreshItem(nextView.get());
-	} else {
-		_items.erase(
-			ranges::remove(_items, view, [](auto view) { return view.get(); }),
-			end(_items));
-		viewReplaced(view, nullptr);
-		_views.erase(i);
-	}
+	_items.erase(
+		ranges::remove(_items, view, [](auto view) { return view.get(); }),
+		end(_items));
+	viewReplaced(view, nullptr);
+	_views.erase(i);
 
 	if (_reactionsManager) {
 		_reactionsManager->remove(item->fullId());
@@ -5158,9 +5136,6 @@ void ListWidget::itemRemoved(not_null<const HistoryItem*> item) {
 		_replyButtonManager->remove(item->fullId());
 	}
 	updateItemsGeometry();
-	if (nextHead) {
-		_delegate->listScrollTo(savedVisibleTop);
-	}
 }
 
 QPoint ListWidget::mapPointToItem(

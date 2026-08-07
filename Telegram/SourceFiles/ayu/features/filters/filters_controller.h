@@ -24,6 +24,7 @@ int countDuplicateGroupSize(not_null<HistoryItem*> item);
 const HistoryItem *getDuplicateHead(not_null<const HistoryItem*> item);
 std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> item);
 void handleDuplicateItemRemoved(not_null<const HistoryItem*> item);
+const HistoryItem *removingItem();
 std::optional<bool> filteredMessagesShown(not_null<PeerData*> peer);
 void toggleFilteredMessagesShown(not_null<PeerData*> peer);
 

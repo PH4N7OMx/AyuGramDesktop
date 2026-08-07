@@ -163,6 +163,11 @@ bool isBlocked(const not_null<PeerData*> peer) {
 }
 
 static base::flat_set<not_null<const HistoryItem*>> notifiedDuplicates;
+static const HistoryItem *s_removingItem = nullptr;
+
+const HistoryItem *removingItem() {
+	return s_removingItem;
+}
 
 const HistoryItem *getPreviousNonService(const not_null<HistoryItem*> item) {
 	const auto history = item->history();
@@ -178,7 +183,7 @@ const HistoryItem *getPreviousNonService(const not_null<HistoryItem*> item) {
 				foundSelf = true;
 				continue;
 			}
-			if (data->isService()) {
+			if (data == s_removingItem || data->isService()) {
 				continue;
 			}
 			if (!lastNonServiceInBlocks) {
@@ -193,7 +198,7 @@ const HistoryItem *getPreviousNonService(const not_null<HistoryItem*> item) {
 }
 
 const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
-	if (!AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
+	if (item.get() == s_removingItem || !AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
 		return nullptr;
 	}
 	const QString text = item->originalText().text;
@@ -203,7 +208,7 @@ const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
 
 	const auto itemPtr = const_cast<HistoryItem*>(item.get());
 	const auto prev = getPreviousNonService(itemPtr);
-	if (!prev) {
+	if (!prev || prev == s_removingItem) {
 		return nullptr;
 	}
 
@@ -213,6 +218,9 @@ const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
 
 	const HistoryItem *head = prev;
 	while (const auto earlier = getPreviousNonService(const_cast<HistoryItem*>(head))) {
+		if (earlier == s_removingItem) {
+			break;
+		}
 		if (earlier->from() == item->from() && earlier->originalText().text == text) {
 			head = earlier;
 		} else {
@@ -241,7 +249,7 @@ void notifyDuplicateHead(
 }
 
 bool isDuplicateMessage(const not_null<HistoryItem*> item) {
-	if (!AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
+	if (item.get() == s_removingItem || !AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
 		return false;
 	}
 	const auto head = getDuplicateHead(item);
@@ -276,7 +284,7 @@ std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> ite
 	if (realHead->id > 0) {
 		for (auto id = realHead->id + 1; id <= realHead->id + 200; ++id) {
 			if (const auto next = owner.message(peerId, id)) {
-				if (next->isService()) {
+				if (next == s_removingItem || next->isService()) {
 					continue;
 				}
 				if (next->from() == realHead->from() && next->originalText().text == text) {
@@ -298,7 +306,7 @@ std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> ite
 					foundHead = true;
 					continue;
 				}
-				if (!foundHead || nextData->isService()) {
+				if (!foundHead || nextData == s_removingItem || nextData->isService()) {
 					continue;
 				}
 				if (nextData->from() == realHead->from() && nextData->originalText().text == text) {
@@ -318,51 +326,52 @@ int countDuplicateGroupSize(const not_null<HistoryItem*> item) {
 }
 
 void handleDuplicateItemRemoved(not_null<const HistoryItem*> item) {
+	s_removingItem = item.get();
 	notifiedDuplicates.remove(item);
 
 	const auto history = item->history();
 	const auto head = getDuplicateHead(item);
-	if (head) {
+	if (head && head != item.get()) {
 		const auto headPtr = const_cast<HistoryItem*>(head);
 		crl::on_main([=] {
+			s_removingItem = nullptr;
 			headPtr->history()->owner().requestItemViewRefresh(headPtr);
 		});
 	} else {
 		const QString text = item->originalText().text;
-		if (text.isEmpty()) {
-			return;
-		}
-		const auto &blocks = history->blocks;
-		bool foundSelf = false;
-		HistoryItem *nextHead = nullptr;
+		if (!text.isEmpty()) {
+			const auto &owner = history->owner();
+			const auto peerId = history->peer->id;
+			HistoryItem *nextHead = nullptr;
 
-		for (const auto &block : blocks) {
-			for (const auto &element : block->messages) {
-				const auto nextData = element->data();
-				if (nextData == item) {
-					foundSelf = true;
-					continue;
-				}
-				if (!foundSelf || nextData->isService()) {
-					continue;
-				}
-				if (nextData->from() == item->from()
-					&& nextData->originalText().text == text) {
-					nextHead = nextData;
-					break;
-				} else {
-					return;
+			if (item->id > 0) {
+				for (auto id = item->id + 1; id <= item->id + 200; ++id) {
+					if (const auto next = owner.message(peerId, id)) {
+						if (next == item.get() || next->isService()) {
+							continue;
+						}
+						if (next->from() == item->from() && next->originalText().text == text) {
+							nextHead = next;
+							break;
+						} else {
+							break;
+						}
+					}
 				}
 			}
+
 			if (nextHead) {
-				break;
+				notifiedDuplicates.remove(nextHead);
+				const auto nextHeadPtr = nextHead;
+				crl::on_main([=] {
+					s_removingItem = nullptr;
+					nextHeadPtr->history()->owner().requestItemViewRefresh(nextHeadPtr);
+				});
+			} else {
+				crl::on_main([] { s_removingItem = nullptr; });
 			}
-		}
-
-		if (nextHead) {
-			crl::on_main([=] {
-				nextHead->history()->owner().requestItemViewRefresh(nextHead);
-			});
+		} else {
+			s_removingItem = nullptr;
 		}
 	}
 }
