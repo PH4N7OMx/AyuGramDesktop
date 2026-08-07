@@ -523,6 +523,7 @@ void SetupExperimental(
 				Core::kOptionFractionalScalingEnabled,
 				Core::kOptionHighDpiDownscale,
 				Ui::GL::kOptionUseQtRhi,
+				Ui::GL::kOptionEnableVulkanRhi,
 				Core::kOptionFreeType,
 				Ui::kOptionQScroller,
 				Window::kOptionDisableTouchbar,

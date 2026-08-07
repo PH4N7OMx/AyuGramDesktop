@@ -143,6 +143,7 @@ void SetupSavedMusic(
 							{
 								if (const auto strong = weak.get()) {
 									strong->show(anim::type::normal);
+									container->resizeToWidth(container->width());
 								}
 							},
 							st::widgetFadeDuration);
@@ -150,6 +151,7 @@ void SetupSavedMusic(
 					musicButton->lifetime());
 			}
 			divider->toggle(true, anim::type::normal);
+			container->resizeToWidth(container->width());
 		}
 	}, container->lifetime());
 	divider->finishAnimating();
