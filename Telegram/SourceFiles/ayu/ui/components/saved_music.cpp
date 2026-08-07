@@ -358,13 +358,13 @@ int AyuMusicButton::resizeGetHeight(int newWidth) {
 
 	const auto coverSize = font->height + skip + font->height;
 
-	const auto available = newWidth - padding.left() - padding.right() - coverSize;
-	_title->resizeToNaturalWidth(available);
-	_title->moveToLeft(st::infoMusicButtonPadding.left() + padding.left() + coverSize, top);
-	_performer->resizeToNaturalWidth(available);
-	_performer->moveToLeft(st::infoMusicButtonPadding.left() + padding.left() + coverSize, top + font->height + skip);
+	const auto available = std::max(newWidth - padding.left() - padding.right() - coverSize - skip, 0);
+	_title->resizeToWidth(std::min(_title->naturalWidth(), available));
+	_title->moveToLeft(padding.left() + coverSize + skip, top);
+	_performer->resizeToWidth(std::min(_performer->naturalWidth(), available));
+	_performer->moveToLeft(padding.left() + coverSize + skip, top + font->height + skip);
 
-	return padding.top() + font->height + skip + font->height + padding.bottom();
+	return padding.top() + coverSize + padding.bottom();
 }
 
 } // namespace Info::Profile

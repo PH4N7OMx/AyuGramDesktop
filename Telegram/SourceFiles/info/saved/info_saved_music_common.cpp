@@ -94,7 +94,8 @@ void SetupSavedMusic(
 							window->showSection(Info::Saved::MakeMusic(peer));
 						})));
 
-				musicButton->show(anim::type::instant);
+				musicButton->hide(anim::type::instant);
+				musicButton->setDuration(250);
 				musicButton->entity()->setAcceptBoth(true);
 				musicButton->entity()->clicks() | rpl::filter([=](Qt::MouseButton mouseButton)
 				{
@@ -138,7 +139,7 @@ void SetupSavedMusic(
 					[=]
 					{
 						if (const auto strong = weak.get()) {
-							strong->show(anim::type::instant);
+							strong->show(anim::type::normal);
 							container->resizeToWidth(container->width());
 						}
 					},
