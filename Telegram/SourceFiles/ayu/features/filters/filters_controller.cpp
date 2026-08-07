@@ -169,23 +169,23 @@ const HistoryItem *removingItem() {
 	return s_removingItem;
 }
 
-std::vector<not_null<HistoryItem*>> getSortedHistoryItems(not_null<History*> history) {
-	std::vector<not_null<HistoryItem*>> list;
-	list.reserve(history->items().size());
-	for (const auto &it : history->items()) {
-		const auto item = it.get();
-		if (!item || item == s_removingItem || item->isService()) {
-			continue;
-		}
-		list.push_back(item);
+const HistoryItem *getPreviousNonService(const not_null<const HistoryItem*> item) {
+	if (item->id <= 0) {
+		return nullptr;
 	}
-	ranges::sort(list, [](not_null<HistoryItem*> a, not_null<HistoryItem*> b) {
-		if (a->id != b->id) {
-			return a->id < b->id;
+	const auto history = item->history();
+	const auto peerId = history->peer->id;
+	const auto &owner = history->owner();
+
+	for (auto id = item->id - 1; id >= item->id - 200 && id > 0; --id) {
+		if (const auto prev = owner.message(peerId, id)) {
+			if (prev == s_removingItem || prev->isService()) {
+				continue;
+			}
+			return prev;
 		}
-		return a->date() < b->date();
-	});
-	return list;
+	}
+	return nullptr;
 }
 
 const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
@@ -197,20 +197,22 @@ const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
 		return nullptr;
 	}
 
-	const auto history = item->history();
-	const auto list = getSortedHistoryItems(history);
-	const auto it = ranges::find(list, item.get(), [](not_null<HistoryItem*> i) { return i.get(); });
-	if (it == list.begin() || it == list.end()) {
+	const auto prev = getPreviousNonService(item);
+	if (!prev || prev == s_removingItem) {
 		return nullptr;
 	}
 
-	const HistoryItem *head = nullptr;
-	auto curr = it;
-	while (curr != list.begin()) {
-		--curr;
-		const auto prev = *curr;
-		if (prev->from() == item->from() && prev->originalText().text == text) {
-			head = prev;
+	if (prev->from() != item->from() || prev->originalText().text != text) {
+		return nullptr;
+	}
+
+	const HistoryItem *head = prev;
+	while (const auto earlier = getPreviousNonService(head)) {
+		if (earlier == s_removingItem) {
+			break;
+		}
+		if (earlier->from() == item->from() && earlier->originalText().text == text) {
+			head = earlier;
 		} else {
 			break;
 		}
@@ -241,20 +243,24 @@ std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> ite
 	const auto head = getDuplicateHead(item);
 	const auto realHead = head ? const_cast<HistoryItem*>(head) : item.get();
 
-	const auto history = realHead->history();
-	const auto list = getSortedHistoryItems(history);
-	const auto it = ranges::find(list, realHead, [](not_null<HistoryItem*> i) { return i.get(); });
-	if (it == list.end()) {
-		result.push_back(realHead);
-		return result;
-	}
+	result.push_back(realHead);
 
-	for (auto curr = it; curr != list.end(); ++curr) {
-		const auto msg = *curr;
-		if (msg->from() == realHead->from() && msg->originalText().text == text) {
-			result.push_back(msg);
-		} else {
-			break;
+	if (realHead->id > 0) {
+		const auto history = realHead->history();
+		const auto peerId = history->peer->id;
+		const auto &owner = history->owner();
+
+		for (auto id = realHead->id + 1; id <= realHead->id + 200; ++id) {
+			if (const auto next = owner.message(peerId, id)) {
+				if (next == s_removingItem || next->isService()) {
+					continue;
+				}
+				if (next->from() == realHead->from() && next->originalText().text == text) {
+					result.push_back(next);
+				} else {
+					break;
+				}
+			}
 		}
 	}
 

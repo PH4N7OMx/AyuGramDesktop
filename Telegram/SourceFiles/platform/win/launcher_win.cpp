@@ -110,6 +110,97 @@ void InstallTestAgentCrashHandling() {
 #endif // _DEBUG
 }
 
+LONG WINAPI AyuUnhandledExceptionFilter(PEXCEPTION_POINTERS pExceptionInfo) {
+	const auto ep = pExceptionInfo ? pExceptionInfo->ExceptionRecord : nullptr;
+	const auto ctx = pExceptionInfo ? pExceptionInfo->ContextRecord : nullptr;
+
+	DWORD code = ep ? ep->ExceptionCode : 0;
+	ULONG_PTR addr = ep ? reinterpret_cast<ULONG_PTR>(ep->ExceptionAddress) : 0;
+
+	wchar_t moduleBuf[MAX_PATH] = { 0 };
+	HMODULE hMod = nullptr;
+	if (addr && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)addr, &hMod)) {
+		GetModuleFileNameW(hMod, moduleBuf, MAX_PATH);
+	}
+
+	ULONG_PTR modOffset = hMod ? (addr - reinterpret_cast<ULONG_PTR>(hMod)) : 0;
+
+	char buf[4096] = { 0 };
+	int len = _snprintf_s(buf, sizeof(buf), _TRUNCATE,
+		"==================================================\n"
+		"AYUGRAM UNHANDLED CRASH DETECTED\n"
+		"==================================================\n"
+		"Exception Code: 0x%08X\n"
+		"Exception Address: 0x%p\n"
+		"Faulting Module: %ls (+0x%IX)\n",
+		code,
+		reinterpret_cast<void*>(addr),
+		moduleBuf[0] ? moduleBuf : L"unknown",
+		modOffset);
+
+	if (ep && code == EXCEPTION_ACCESS_VIOLATION && ep->NumberParameters >= 2) {
+		const char *opType = (ep->ExceptionInformation[0] == 0) ? "Read" : ((ep->ExceptionInformation[0] == 1) ? "Write" : "Execute");
+		if (len > 0 && len < sizeof(buf)) {
+			len += _snprintf_s(buf + len, sizeof(buf) - len, _TRUNCATE,
+				"Access Violation: Failed to %s memory 0x%p\n",
+				opType,
+				reinterpret_cast<void*>(ep->ExceptionInformation[1]));
+		}
+	}
+
+	if (ctx && len > 0 && len < sizeof(buf)) {
+#if defined(_M_AMD64) || defined(__x86_64__)
+		len += _snprintf_s(buf + len, sizeof(buf) - len, _TRUNCATE,
+			"Registers:\n"
+			"RAX: 0x%016I64X  RBX: 0x%016I64X  RCX: 0x%016I64X  RDX: 0x%016I64X\n"
+			"RSI: 0x%016I64X  RDI: 0x%016I64X  RBP: 0x%016I64X  RSP: 0x%016I64X\n"
+			"RIP: 0x%016I64X\n",
+			ctx->Rax, ctx->Rbx, ctx->Rcx, ctx->Rdx,
+			ctx->Rsi, ctx->Rdi, ctx->Rbp, ctx->Rsp,
+			ctx->Rip);
+#endif
+	}
+
+	FILE *f = nullptr;
+	if (fopen_s(&f, "crash_log.txt", "w") == 0 && f) {
+		fputs(buf, f);
+		fflush(f);
+		fclose(f);
+	}
+
+	FILE *fLog = nullptr;
+	if (fopen_s(&fLog, "log.txt", "a") == 0 && fLog) {
+		fputs("\n", fLog);
+		fputs(buf, fLog);
+		fflush(fLog);
+		fclose(fLog);
+	}
+
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+void InstallAyuCrashHandler() {
+	SetUnhandledExceptionFilter(AyuUnhandledExceptionFilter);
+	_set_purecall_handler([] {
+		FILE *f = nullptr;
+		if (fopen_s(&f, "crash_log.txt", "w") == 0 && f) {
+			fputs("AYUGRAM CRASH: Pure virtual function call\n", f);
+			fflush(f);
+			fclose(f);
+		}
+	});
+	_set_invalid_parameter_handler([](const wchar_t *expr, const wchar_t *, const wchar_t *, unsigned int, uintptr_t) {
+		FILE *f = nullptr;
+		if (fopen_s(&f, "crash_log.txt", "w") == 0 && f) {
+			char buf[512] = { 0 };
+			_snprintf_s(buf, sizeof(buf) - 1, "AYUGRAM CRASH: CRT Invalid Parameter (%ls)\n", expr ? expr : L"unknown");
+			fputs(buf, f);
+			fflush(f);
+			fclose(f);
+		}
+	});
+}
+
 } // namespace
 
 Launcher::Launcher(int argc, char *argv[])
@@ -117,6 +208,7 @@ Launcher::Launcher(int argc, char *argv[])
 }
 
 void Launcher::initHook() {
+	InstallAyuCrashHandler();
 	if (cTestAgent()) {
 		InstallTestAgentCrashHandling();
 	}
