@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_list_widget.h"
 
+#include "ayu/ayu_settings.h"
+
 #include "base/unixtime.h"
 #include "base/qt/qt_key_modifiers.h"
 #include "base/qt/qt_common_adapters.h"
@@ -5121,11 +5123,50 @@ void ListWidget::itemRemoved(not_null<const HistoryItem*> item) {
 	});
 
 	const auto view = i->second.get();
-	_items.erase(
-		ranges::remove(_items, view, [](auto view) { return view.get(); }),
-		end(_items));
-	viewReplaced(view, nullptr);
-	_views.erase(i);
+
+	const HistoryItem *nextHead = nullptr;
+	if (AyuSettings::getInstance().collapseDuplicates() && !item->isService()) {
+		const auto &text = item->originalText().text;
+		if (!text.isEmpty()) {
+			const auto history = item->history();
+			bool foundSelf = false;
+			for (const auto &block : history->blocks) {
+				for (const auto &element : block->messages) {
+					const auto nextData = element->data();
+					if (nextData == item) {
+						foundSelf = true;
+						continue;
+					}
+					if (!foundSelf || nextData->isService()) {
+						continue;
+					}
+					if (nextData->from() == item->from()
+						&& nextData->originalText().text == text) {
+						nextHead = nextData;
+						break;
+					} else if (foundSelf) {
+						break;
+					}
+				}
+				if (nextHead) break;
+			}
+		}
+	}
+
+	const auto it = ranges::find(_items, view, [](auto v) { return v.get(); });
+	if (nextHead && it != end(_items)) {
+		const auto nextView = enforceViewForItem(const_cast<HistoryItem*>(nextHead), _viewsCapacity);
+		*it = nextView;
+		viewReplaced(view, nextView.get());
+		_views.erase(i);
+		refreshItem(nextView.get());
+	} else {
+		_items.erase(
+			ranges::remove(_items, view, [](auto view) { return view.get(); }),
+			end(_items));
+		viewReplaced(view, nullptr);
+		_views.erase(i);
+	}
 
 	if (_reactionsManager) {
 		_reactionsManager->remove(item->fullId());

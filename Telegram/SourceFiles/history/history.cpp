@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/history.h"
 
+#include "ayu/features/filters/filters_controller.h"
+
 #include "history/view/history_view_element.h"
 #include "history/view/history_view_item_preview.h"
 #include "history/view/history_view_translate_tracker.h"
@@ -208,6 +210,7 @@ void History::setHasPendingResizedItems() {
 }
 
 void History::itemRemoved(not_null<HistoryItem*> item) {
+	FiltersController::handleDuplicateItemRemoved(item);
 	if (item == _joinedMessage) {
 		_joinedMessage = nullptr;
 	} else if (item == _newPeerNameChange) {
@@ -1711,6 +1714,7 @@ void History::newItemAdded(not_null<HistoryItem*> item, NewAddType type) {
 		item->incrementReplyToTopCounter();
 	}
 	if (!folderKnown()) {
+		clearFolder();
 		owner().histories().requestDialogEntry(this);
 	}
 	if (const auto topic = item->topic()) {
@@ -3410,6 +3414,7 @@ bool History::shouldBeInChatList() const {
 	} else if (const auto channel = peer->asChannel()) {
 		if (!channel->amIn()) {
 			if (AyuSettings::getInstance().keepForbiddenChats()
+				&& channel->wasIn()
 				&& (channel->haveLeft() || channel->isForbidden())
 				&& (lastMessageKnown() && lastMessage() != nullptr)) {
 				return true;
@@ -3419,6 +3424,7 @@ bool History::shouldBeInChatList() const {
 	} else if (const auto chat = peer->asChat()) {
 		if (!chat->amIn()) {
 			if (AyuSettings::getInstance().keepForbiddenChats()
+				&& chat->wasIn()
 				&& (chat->haveLeft() || chat->isForbidden())
 				&& (lastMessageKnown() && lastMessage() != nullptr)) {
 				return true;
@@ -3514,10 +3520,18 @@ void History::applyDialog(
 	if (const auto ttl = data.vttl_period()) {
 		peer->setMessagesTTL(ttl->v);
 	}
+	if (const auto channel = peer->asChannel()) {
+		channel->setWasIn(true);
+	} else if (const auto chat = peer->asChat()) {
+		chat->setWasIn(true);
+	}
 	owner().histories().dialogEntryApplied(this);
 }
 
 void History::dialogEntryApplied() {
+	if (!folderKnown()) {
+		clearFolder();
+	}
 	if (!lastServerMessageKnown()) {
 		setLastServerMessage(nullptr);
 	} else if (!lastMessageKnown()) {

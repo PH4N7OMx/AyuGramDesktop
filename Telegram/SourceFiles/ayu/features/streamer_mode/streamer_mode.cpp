@@ -7,6 +7,7 @@
 
 #include "ayu/features/streamer_mode/streamer_mode.h"
 
+#include "ayu/ayu_settings.h"
 #include "window/window_controller.h"
 
 #if defined Q_OS_WINRT || defined Q_OS_WIN
@@ -30,12 +31,14 @@ bool isEnabled()
 void enable()
 {
 	isEnabledVal = true;
+	AyuSettings::getInstance().setStreamerModeEnabled(true);
 	Impl::enableHook();
 }
 
 void disable()
 {
 	isEnabledVal = false;
+	AyuSettings::getInstance().setStreamerModeEnabled(false);
 	Impl::disableHook();
 }
 

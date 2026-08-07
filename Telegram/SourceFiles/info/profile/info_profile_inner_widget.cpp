@@ -97,6 +97,10 @@ void AddSavedMusic(
 	wrap->toggleOn(
 		wrap->entity()->heightValue() | rpl::map(_1 > 0),
 		anim::type::instant);
+	wrap->entity()->heightValue(
+	) | rpl::on_next([layout] {
+		layout->resizeToWidth(layout->width());
+	}, wrap->lifetime());
 }
 
 void AddAboutVerification(

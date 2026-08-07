@@ -192,7 +192,7 @@ const HistoryItem *getPreviousNonService(const not_null<HistoryItem*> item) {
 	return foundSelf ? nullptr : lastNonServiceInBlocks;
 }
 
-const HistoryItem *getDuplicateHead(const not_null<HistoryItem*> item) {
+const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
 	if (!AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
 		return nullptr;
 	}
@@ -201,7 +201,8 @@ const HistoryItem *getDuplicateHead(const not_null<HistoryItem*> item) {
 		return nullptr;
 	}
 
-	const auto prev = getPreviousNonService(item);
+	const auto itemPtr = const_cast<HistoryItem*>(item.get());
+	const auto prev = getPreviousNonService(itemPtr);
 	if (!prev) {
 		return nullptr;
 	}
@@ -284,6 +285,98 @@ int countDuplicateGroupSize(const not_null<HistoryItem*> item) {
 		}
 	}
 	return count;
+}
+
+std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> item) {
+	std::vector<not_null<HistoryItem*>> result;
+	if (!AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
+		result.push_back(item);
+		return result;
+	}
+	const auto &text = item->originalText().text;
+	if (text.isEmpty()) {
+		result.push_back(item);
+		return result;
+	}
+
+	const auto head = getDuplicateHead(item);
+	const auto realHead = head ? const_cast<HistoryItem*>(head) : item.get();
+
+	result.push_back(realHead);
+
+	const auto history = realHead->history();
+	const auto &blocks = history->blocks;
+	bool foundHead = false;
+
+	for (const auto &block : blocks) {
+		for (const auto &element : block->messages) {
+			const auto nextData = element->data();
+			if (nextData == realHead) {
+				foundHead = true;
+				continue;
+			}
+			if (!foundHead || nextData->isService()) {
+				continue;
+			}
+			if (nextData->from() == realHead->from()
+				&& nextData->originalText().text == text) {
+				result.push_back(nextData);
+			} else if (foundHead) {
+				return result;
+			}
+		}
+	}
+	return result;
+}
+
+void handleDuplicateItemRemoved(not_null<const HistoryItem*> item) {
+	notifiedDuplicates.remove(item);
+
+	const auto history = item->history();
+	const auto head = getDuplicateHead(item);
+	if (head) {
+		const auto headPtr = const_cast<HistoryItem*>(head);
+		crl::on_main([=] {
+			headPtr->history()->owner().requestItemViewRefresh(headPtr);
+		});
+	} else {
+		const auto &text = item->originalText().text;
+		if (text.isEmpty()) {
+			return;
+		}
+		const auto &blocks = history->blocks;
+		bool foundSelf = false;
+		HistoryItem *nextHead = nullptr;
+
+		for (const auto &block : blocks) {
+			for (const auto &element : block->messages) {
+				const auto nextData = element->data();
+				if (nextData == item) {
+					foundSelf = true;
+					continue;
+				}
+				if (!foundSelf || nextData->isService()) {
+					continue;
+				}
+				if (nextData->from() == item->from()
+					&& nextData->originalText().text == text) {
+					nextHead = nextData;
+					break;
+				} else {
+					return;
+				}
+			}
+			if (nextHead) {
+				break;
+			}
+		}
+
+		if (nextHead) {
+			crl::on_main([=] {
+				nextHead->history()->owner().requestItemViewRefresh(nextHead);
+			});
+		}
+	}
 }
 
 bool isBlockedOrRegexFiltered(const not_null<HistoryItem*> item) {

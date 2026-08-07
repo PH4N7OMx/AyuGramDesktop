@@ -9035,6 +9035,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_UpdateAyuGram" = "Update AyuGram";
 "ayu_UtilityRestartRequired" = "The app will close in 5 seconds.";
 "ayu_CollapseDuplicates" = "Collapse repeats (xN)";
+"ayu_DeleteAllDuplicates" = "Delete all duplicates";
 "ayu_DisableMentions" = "Disable mentions";
 "ayu_EnableMentions" = "Enable mentions";
 "ayu_MentionsMenuSoundSelect" = "Select mention sound";

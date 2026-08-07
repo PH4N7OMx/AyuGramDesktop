@@ -83,6 +83,12 @@ public:
 	[[nodiscard]] bool amIn() const {
 		return !isForbidden() && !isDeactivated() && !haveLeft();
 	}
+	[[nodiscard]] bool wasIn() const {
+		return _wasIn || amIn();
+	}
+	void setWasIn(bool val = true) {
+		_wasIn = val;
+	}
 	[[nodiscard]] bool haveLeft() const {
 		return flags() & ChatDataFlag::Left;
 	}
@@ -202,6 +208,7 @@ private:
 
 	ChannelData *_migratedTo = nullptr;
 	rpl::lifetime _lifetime;
+	bool _wasIn = false;
 
 };
 

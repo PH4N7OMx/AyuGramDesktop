@@ -149,6 +149,9 @@ void ChatData::invalidateParticipants() {
 void ChatData::setFlags(ChatDataFlags which) {
 	const auto wasIn = amIn();
 	_flags.set(which);
+	if (amIn()) {
+		_wasIn = true;
+	}
 	if (wasIn && !amIn()) {
 		if (!AyuSettings::getInstance().keepForbiddenChats()) {
 			crl::on_main(&session(), [=] {

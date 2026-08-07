@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_context_menu.h"
 
+#include "ayu/features/filters/filters_controller.h"
+
 #include "api/api_attached_stickers.h"
 #include "api/api_editing.h"
 #include "api/api_global_privacy.h"
@@ -979,6 +981,22 @@ bool AddDeleteMessageAction(
 		callback,
 		item->ttlDestroyAt(),
 		[=] { delete menu; }));
+	const auto dupes = FiltersController::getDuplicateGroup(item);
+	if (dupes.size() > 1) {
+		menu->addAction(
+			tr::ayu_DeleteAllDuplicates(tr::now),
+			crl::guard(controller, [=] {
+				if (const auto item = owner->message(itemId)) {
+					const auto dupesNow = FiltersController::getDuplicateGroup(item);
+					if (!dupesNow.empty()) {
+						controller->show(Box<DeleteMessagesBox>(
+							&owner->session(),
+							owner->itemsToIds(dupesNow)));
+					}
+				}
+			}),
+			&st::menuIconDelete);
+	}
 	return true;
 }
 

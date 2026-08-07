@@ -273,6 +273,9 @@ public:
 
 	void validate();
 
+	[[nodiscard]] bool streamerModeEnabled() const { return _streamerModeEnabled.current(); }
+	void setStreamerModeEnabled(bool val);
+
 	[[nodiscard]] bool saveDeletedMessages() const { return _saveDeletedMessages.current(); }
 	[[nodiscard]] bool saveMessagesHistory() const { return _saveMessagesHistory.current(); }
 	[[nodiscard]] bool keepForbiddenChats() const { return _keepForbiddenChats.current(); }
@@ -642,6 +645,7 @@ private:
 
 	[[nodiscard]] uint64 getOverriddenGhostUserId(uint64 userId) const { return _useGlobalGhostMode.current() ? 0 : userId; }
 
+	rpl::variable<bool> _streamerModeEnabled = false;
 	rpl::variable<bool> _saveDeletedMessages = true;
 	rpl::variable<bool> _saveMessagesHistory = true;
 	rpl::variable<bool> _keepForbiddenChats = true;

@@ -21,6 +21,9 @@ bool isBlocked(not_null<PeerData*> peer);
 bool isBlockedOrRegexFiltered(not_null<HistoryItem*> item);
 bool filtered(not_null<HistoryItem*> historyItem);
 int countDuplicateGroupSize(not_null<HistoryItem*> item);
+const HistoryItem *getDuplicateHead(not_null<const HistoryItem*> item);
+std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> item);
+void handleDuplicateItemRemoved(not_null<const HistoryItem*> item);
 std::optional<bool> filteredMessagesShown(not_null<PeerData*> peer);
 void toggleFilteredMessagesShown(not_null<PeerData*> peer);
 

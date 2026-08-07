@@ -222,6 +222,9 @@ void ChannelData::setFlags(ChannelDataFlags which) {
 		mgInfo->ensureForum(this);
 	}
 	_flags.set(which);
+	if (amIn()) {
+		_wasIn = true;
+	}
 	if (diff & (Flag::Left | Flag::Forbidden)) {
 		if (const auto chat = getMigrateFromChat()) {
 			session().changes().peerUpdated(chat, UpdateFlag::Migration);

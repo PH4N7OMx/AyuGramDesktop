@@ -261,6 +261,12 @@ public:
 	[[nodiscard]] bool amIn() const {
 		return !isForbidden() && !haveLeft() && !isCommunity();
 	}
+	[[nodiscard]] bool wasIn() const {
+		return _wasIn || amIn();
+	}
+	void setWasIn(bool val = true) {
+		_wasIn = val;
+	}
 	[[nodiscard]] bool addsSignature() const {
 		return flags() & Flag::Signatures;
 	}
@@ -652,6 +658,7 @@ private:
 	PeerId _callDefaultJoinAs = 0;
 
 	std::unique_ptr<Ui::BotVerifyDetails> _botVerifyDetails;
+	bool _wasIn = false;
 
 };
 

@@ -4614,10 +4614,6 @@ bool HistoryItem::hasPossibleRestrictions() const {
 }
 
 bool HistoryItem::isEmpty() const {
-	if (isMessageHidden(const_cast<HistoryItem*>(this))) {
-		return true;
-	}
-
 	return _text.empty()
 		&& !_media
 		&& !Has<HistoryMessageRichPageSource>()

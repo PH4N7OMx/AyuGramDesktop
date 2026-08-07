@@ -6,6 +6,7 @@
 // Copyright @Radolyn, 2026
 #include "ayu/ayu_settings.h"
 
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ayu/ui/ayu_logo.h"
 #include "ayu/ayu_worker.h"
 #include "base/unixtime.h"
@@ -417,6 +418,10 @@ void AyuSettings::load() {
 	}
 
 	settings.validate();
+
+	if (settings.streamerModeEnabled()) {
+		AyuFeatures::StreamerMode::enable();
+	}
 }
 
 void AyuSettings::save() {
@@ -545,6 +550,12 @@ void AyuSettings::setSaveDeletedMessages(bool val) {
 void AyuSettings::setSaveMessagesHistory(bool val) {
 	if (_saveMessagesHistory.current() == val) return;
 	_saveMessagesHistory = val;
+	save();
+}
+
+void AyuSettings::setStreamerModeEnabled(bool val) {
+	if (_streamerModeEnabled.current() == val) return;
+	_streamerModeEnabled = val;
 	save();
 }
 
@@ -1177,6 +1188,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 	j = nlohmann::json{
 		{"ghostModeSettings", ghostAccounts},
 		{"useGlobalGhostMode", s._useGlobalGhostMode.current()},
+		{"streamerModeEnabled", s._streamerModeEnabled.current()},
 		{"saveDeletedMessages", s._saveDeletedMessages.current()},
 		{"saveMessagesHistory", s._saveMessagesHistory.current()},
 		{"keepForbiddenChats", s._keepForbiddenChats.current()},
@@ -1285,6 +1297,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	}
 
 	s._useGlobalGhostMode = j.value("useGlobalGhostMode", defaults._useGlobalGhostMode.current());
+	s._streamerModeEnabled = j.value("streamerModeEnabled", defaults._streamerModeEnabled.current());
 	s._saveDeletedMessages = j.value("saveDeletedMessages", defaults._saveDeletedMessages.current());
 	s._saveMessagesHistory = j.value("saveMessagesHistory", defaults._saveMessagesHistory.current());
 	s._keepForbiddenChats = j.value("keepForbiddenChats", defaults._keepForbiddenChats.current());
