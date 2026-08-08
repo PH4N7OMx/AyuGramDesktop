@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "calls/group/calls_group_panel.h"
+#include "ayu/ayu_settings.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
 
 #include "calls/group/calls_group_common.h"
@@ -382,7 +383,7 @@ void Panel::chooseSourceStop() {
 }
 
 void Panel::initWindow() {
-	if (AyuFeatures::StreamerMode::isEnabled()) {
+	if (AyuSettings::getInstance().streamerMode()) {
 		AyuFeatures::StreamerMode::hideWidgetWindow(window().get());
 	}
 	window()->setAttribute(Qt::WA_OpaquePaintEvent);

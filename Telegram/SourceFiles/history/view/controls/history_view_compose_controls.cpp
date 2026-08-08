@@ -4122,6 +4122,26 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 	// (_attachDocument|_attachPhoto) _field (_ttlInfo) (_scheduled) (_silent|_botCommandStart) _tabbedSelectorToggle _send
 
 	const auto &settings = AyuSettings::getInstance();
+
+	const auto oldComposeHeight = shouldShowRichDraftPreview()
+		? _richDraftPreview->height()
+		: _field->height();
+	const auto commentsShown = _commentsShown
+		&& !_commentsShown->isHidden();
+	const auto fieldWidth = size.width()
+		- (commentsShown
+			? (_commentsShown->width() + _st.commentsSkip)
+			: 0)
+		- (((_attachToggle && settings.showAttachButtonInMessageField()) || _sendAs) ? _st.padding.left() : _st.fieldLeft)
+		- (_attachToggle && settings.showAttachButtonInMessageField() ? _attachToggle->width() : 0)
+		- (_sendAs ? _sendAs->width() : 0)
+		- _st.padding.right()
+		- _send->width()
+		- (_editStars ? _editStars->width() : 0)
+		- (settings.showEmojiButtonInMessageField() ? _tabbedSelectorToggle->width() : 0)
+		- (_likeShown ? _like->width() : 0)
+		- (_botCommandShown && settings.showCommandsButtonInMessageField() ? _botCommandStart->width() : 0)
+		- ((_silent && !_silent->isHidden()) ? _silent->width() : 0)
 		- ((_scheduled && !_scheduled->isHidden())
 			? _scheduled->width()
 			: 0)

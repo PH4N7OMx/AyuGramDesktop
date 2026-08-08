@@ -3100,6 +3100,7 @@ void Session::checkTTLs() {
 		notifyItemsAboutToBeDestroyed(toDestroy);
 		for (const auto &item : toDestroy) {
 			item->destroy();
+		}
 	}
 	scheduleNextTTLs();
 }
