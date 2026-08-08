@@ -145,7 +145,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace {
 
-constexpr auto kScrollDateHideTimeout = 1000;
+constexpr auto kScrollDateHideTimeout = 800;
 constexpr auto kScrollDateHideOnDayCrossingTimeout = crl::time(3000);
 constexpr auto kUnloadHeavyPartsPages = 2;
 constexpr auto kClearUserpicsAfter = 50;
@@ -631,6 +631,7 @@ void HistoryInner::reactionChosen(const ChosenReaction &reaction) {
 				.id = reaction.id,
 				.flyIcon = reaction.icon,
 				.flyFrom = geometry.translated(0, -top),
+				.haptic = true,
 			});
 		}
 	}
@@ -2814,7 +2815,7 @@ void HistoryInner::toggleFavoriteReaction(not_null<Element*> view) const {
 		return;
 	} else if (!ranges::contains(item->chosenReactions(), favorite)) {
 		if (const auto top = itemTop(view); top >= 0) {
-			view->animateReaction({ .id = favorite });
+			view->animateReaction({ .id = favorite, .haptic = true });
 		}
 	}
 	item->toggleReaction(favorite, HistoryReactionSource::Quick);
@@ -3941,6 +3942,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 	const auto desiredPosition = e->globalPos();
 	const auto reactItem = Element::Hovered()
 		? Element::Hovered()->data().get()
+		: Element::Moused()
+		? Element::Moused()->data().get()
 		: nullptr;
 	const auto attached = reactItem
 		? AttachSelectorToMenu(
@@ -6007,7 +6010,11 @@ bool HistoryInner::goodForSelection(
 		not_null<SelectedItems*> toItems,
 		not_null<HistoryItem*> item,
 		int &totalCount) const {
-	if (isMessageHidden(item) || !item->canBeSelected()) {
+	if (isMessageHidden(item)) {
+		return false;
+	}
+
+	if (!item->canBeSelected()) {
 		return false;
 	} else if (!toItems->empty()
 		&& !(*toItems->begin())->inSameSelectionGroup(item)) {

@@ -1,7 +1,13 @@
-name: 🐞 Bug report
+name: Bug report
 description: Report errors or unexpected behavior.
 labels: [bug]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting issues of AyuGram Desktop!
+
+        To make it easier for us to help you please enter detailed information below.
   - type: textarea
     attributes:
       label: Steps to reproduce
@@ -26,18 +32,14 @@ body:
   - type: input
     attributes:
       label: Operating system
-      description: |
-        Write exact OS (e.g. Windows 11, macOS 14, Ubuntu 24.04 GNOME).
-        * 🛑 NO KERNEL VERSIONS (uname)
+      description: >
+        Your operating system name, version and desktop environment.
+        **Don't use kernel version (uname), it's useless.**
     validations:
       required: true
-  - type: input
-    attributes:
-      label: Version of Telegram Desktop
-      description: |
-        Write EXACT version number (e.g. 5.1.2).
-        * 🛑 DO NOT WRITE "LATEST". We will instantly close the issue.
-        * 🛑 LINUX REPO VERSIONS ARE NOT SUPPORTED. Go to your distro's tracker (unless you are the distro maintainer).
+      label: Version of AyuGram Desktop
+      description: >
+        **Don't use 'latest'**, specify actual version.
     validations:
       required: true
   - type: dropdown
@@ -45,30 +47,24 @@ body:
       label: Installation source
       multiple: false
       options:
-        - Downloaded from desktop.telegram.org or GitHub
-        - Microsoft Store
-        - Mac App Store
-        - Flatpak
-        - Snap
-        - Linux package manager (apt, dnf, pacman, etc)
-        - Other source
+        - Binary from GitHub / @AyuGramReleases channel
+        - Arch Linux (ayugram-desktop / ayugram-desktop-git)
+        - Arch Linux (ayugram-desktop-bin)
+        - flatpak by 0FL01
+        - Other (unofficial) source
     validations:
       required: true
   - type: input
     attributes:
       label: Crash ID
-      description: |
-        If the app crashed, we need a Crash ID.
-        1. Go to Settings -> Advanced
-        2. Enable "Install beta versions"
-        3. Reproduce the crash
-        4. Copy the Crash ID on next launch
+      description: >
+        If you're reporting a crash, please enter the crash ID from the crash reporter
+        opening on the next launch after crash.
   - type: textarea
     attributes:
       label: Logs
       description: >
-        Type the word `viewlogs`
-        [directly into your settings menu](https://github.com/telegramdesktop/tdesktop/wiki/Cheat-Codes)
-        to open the logs folder.
-      placeholder: Insert log.txt here
+        You can find log.txt using the `viewlogs`
+        [cheat code](https://github.com/telegramdesktop/tdesktop/wiki/Cheat-Codes).
+      placeholder: Insert log.txt here (if necessary)
       render: shell

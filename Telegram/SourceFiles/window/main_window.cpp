@@ -193,10 +193,6 @@ void OverrideApplicationIcon(QImage image) {
 	OverridenIcon() = std::move(image);
 }
 
-QIcon CreateOfficialIcon(Main::Session *session) {
-	return QIcon(Ui::PixmapFromImage(AyuAssets::currentAppLogo()));
-}
-
 QIcon CreateSupportIcon(Main::Session *session) {
 	const auto support = (session && session->supportMode());
 	if (!support) {
@@ -212,11 +208,15 @@ QIcon CreateSupportIcon(Main::Session *session) {
 
 QIcon CreateIcon(Main::Session *session, bool returnNullIfDefault) {
 	const auto supportIcon = CreateSupportIcon(session);
-	if (!supportIcon.isNull() || returnNullIfDefault) {
+	if (!supportIcon.isNull()) {
 		return supportIcon;
 	}
 
-	const auto officialIcon = CreateOfficialIcon(session);
+	const auto officialIcon = QIcon(
+		Ui::PixmapFromImage(base::duplicate(Logo())));
+	if (!officialIcon.isNull() || returnNullIfDefault) {
+		return officialIcon;
+	}
 
 	if constexpr (!Platform::IsLinux()) {
 		return officialIcon;

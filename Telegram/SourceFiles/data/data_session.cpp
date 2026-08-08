@@ -2927,9 +2927,11 @@ void Session::updateEditedMessage(const MTPMessage &data) {
 	}
 	edit = HistoryMessageEdition(_session, data.c_message());
 	if (settings.saveMessagesHistory() && !existing->isLocal() && !existing->author()->isSelf() && !edit.isEditHide) {
-		const auto msg = existing->originalText();
-
-		if (edit.textWithEntities == msg || msg.empty()) {
+		const auto &msg = existing->originalText();
+		const auto unchanged = edit.richPage
+			? (Iv::FlattenRichPageSummary(edit.richPage) == msg)
+			: (edit.textWithEntities == msg);
+		if (unchanged || msg.empty()) {
 			goto proceed;
 		}
 
@@ -3077,8 +3079,6 @@ void Session::unregisterMessageTTL(
 }
 
 void Session::checkTTLs() {
-	const auto &settings = AyuSettings::getInstance();
-
 	_ttlCheckTimer.cancel();
 	const auto now = base::unixtime::now();
 	auto expired = std::vector<not_null<HistoryItem*>>();
@@ -3088,18 +3088,18 @@ void Session::checkTTLs() {
 		}
 		expired.insert(expired.end(), items.begin(), items.end());
 	}
-	if (!expired.empty()) {
-		if (settings.saveDeletedMessages()) {
-			for (const auto &item : expired) {
-				item->applyTTL(0);
-				processMessageDelete(item);
-			}
+	auto toDestroy = std::vector<not_null<HistoryItem*>>();
+	for (const auto &item : expired) {
+		if (isMessageSavable(item)) {
+			processMessageDelete(item);
 		} else {
-			notifyItemsAboutToBeDestroyed(expired);
-			for (const auto &item : expired) {
-				item->destroy();
-			}
+			toDestroy.push_back(item);
 		}
+	}
+	if (!toDestroy.empty()) {
+		notifyItemsAboutToBeDestroyed(toDestroy);
+		for (const auto &item : toDestroy) {
+			item->destroy();
 	}
 	scheduleNextTTLs();
 }
@@ -3161,12 +3161,12 @@ void Session::processMessagesDeleted(
 	for (const auto &messageId : data) {
 		const auto i = list ? list->find(messageId.v) : Messages::iterator();
 		if (list && i != list->end()) {
-			const auto history = i->second->history();
-			if (AyuSettings::getInstance().saveDeletedMessages()) {
-				processMessageDelete(i->second);
+			const auto item = i->second;
+			const auto history = item->history();
+			if (isMessageSavable(item)) {
+				processMessageDelete(item);
 			} else {
-				toDestroy.push_back(i->second);
-			}
+				toDestroy.push_back(item);
 			historiesToCheck.emplace(history);
 		} else if (affected) {
 			affected->unknownMessageDeleted(messageId.v);
@@ -3191,7 +3191,7 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 	for (const auto &messageId : data) {
 		if (const auto item = nonChannelMessage(messageId.v)) {
 			const auto history = item->history();
-			if (AyuSettings::getInstance().saveDeletedMessages()) {
+			if (isMessageSavable(item)) {
 				processMessageDelete(item);
 			} else {
 				toDestroy.push_back(item);

@@ -126,6 +126,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 
 // AyuGram includes
+#include "data/data_ai_compose_tones.h"
 #include "ayu/ayu_settings.h"
 #include "history/history_item_components.h"
 
@@ -2477,6 +2478,7 @@ void ComposeControls::init() {
 		AyuSettings::getInstance().showEmojiButtonInMessageFieldChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showMicrophoneButtonInMessageFieldChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showAutoDeleteButtonInMessageFieldChanges() | rpl::to_empty,
+		session().data().aiComposeTones().updated() | rpl::to_empty,
 		AyuSettings::getInstance().showAiEditorButtonInMessageFieldChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showAttachPopupChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showEmojiPopupChanges() | rpl::to_empty,
@@ -3307,10 +3309,13 @@ void ComposeControls::initTabbedSelector() {
 				crl::guard(_field, [=](
 						Api::SendOptions options,
 						TextWithTags caption) {
+					const auto effectiveFrom = options.scheduled
+						? Ui::MessageSendingAnimationFrom()
+						: from;
 					_fileChosen.fire({
 						.document = document,
 						.options = options,
-						.messageSendingFrom = from,
+						.messageSendingFrom = effectiveFrom,
 						.caption = std::move(caption),
 					});
 				}));
@@ -4117,27 +4122,14 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 	// (_attachDocument|_attachPhoto) _field (_ttlInfo) (_scheduled) (_silent|_botCommandStart) _tabbedSelectorToggle _send
 
 	const auto &settings = AyuSettings::getInstance();
-	const auto oldComposeHeight = shouldShowRichDraftPreview()
-		? _richDraftPreview->height()
-		: _field->height();
-	const auto commentsShown = _commentsShown
-		&& !_commentsShown->isHidden();
-	const auto fieldWidth = size.width()
-		- (commentsShown
-			? (_commentsShown->width() + _st.commentsSkip)
+		- ((_scheduled && !_scheduled->isHidden())
+			? _scheduled->width()
 			: 0)
-		- (((_attachToggle && settings.showAttachButtonInMessageField()) || _sendAs) ? _st.padding.left() : _st.fieldLeft)
-		- (_attachToggle && settings.showAttachButtonInMessageField() ? _attachToggle->width() : 0)
-		- (_sendAs ? _sendAs->width() : 0)
-		- _st.padding.right()
-		- _send->width()
-		- (_editStars ? _editStars->width() : 0)
-		- (settings.showEmojiButtonInMessageField() ? _tabbedSelectorToggle->width() : 0)
-		- (_likeShown ? _like->width() : 0)
-		- (_botCommandShown && settings.showCommandsButtonInMessageField() ? _botCommandStart->width() : 0)
-		- ((_silent && !_silent->isHidden()) ? _silent->width() : 0)
-		- ((_scheduled && !_scheduled->isHidden()) ? _scheduled->width() : 0)
-		- ((_ttlInfo && _ttlInfo->isVisible() && settings.showAutoDeleteButtonInMessageField()) ? _ttlInfo->width() : 0)
+		- ((_ttlInfo
+			&& _ttlInfo->isVisible()
+			&& settings.showAutoDeleteButtonInMessageField())
+			? _ttlInfo->width()
+			: 0)
 		- (_starsReaction
 			? (_st.starsSkip + _starsReaction->width())
 			: 0);
@@ -4253,6 +4245,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 
 void ComposeControls::updateControlsVisibility() {
 	const auto &settings = AyuSettings::getInstance();
+
 	const auto hide = hideExtraButtons();
 	if (_botCommandStart) {
 		SWITCH_BUTTON(_botCommandStart, _botCommandShown && settings.showCommandsButtonInMessageField());
@@ -4263,7 +4256,6 @@ void ComposeControls::updateControlsVisibility() {
 	if (_editStars) {
 		_editStars->show();
 	}
-
 	if (_sendAs) {
 		_sendAs->show();
 	}
@@ -4287,7 +4279,8 @@ void ComposeControls::updateControlsVisibility() {
 	}
 	SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField());
 	if (_ttlInfo) {
-		SWITCH_BUTTON(_ttlInfo, !hide && settings.showAutoDeleteButtonInMessageField());
+		_ttlInfo->setVisible(
+			!hide && settings.showAutoDeleteButtonInMessageField());
 	}
 	updateAiButtonVisibility();
 	updateSendAsFileVisibility();

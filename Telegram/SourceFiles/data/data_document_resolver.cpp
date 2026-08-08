@@ -257,7 +257,6 @@ void ResolveDocument(
 
 	const auto media = document->createMediaView();
 	const auto openPluginInfo = [&] {
-		// image size limit is fine too ig (64MB)
 		if (document->size >= Images::kReadBytesLimit) {
 			return false;
 		}

@@ -270,7 +270,7 @@ enum class MessageFlag : uint64 {
 	HasUnreadReaction     = (1ULL << 14),
 	MentionsMe            = (1ULL << 15),
 	IsOrWasScheduled      = (1ULL << 16),
-	NoForwards            = (1ULL << 17),
+	AyuNoForwards         = (1ULL << 17),
 	InvertMedia           = (1ULL << 18),
 
 	// Needs to return back to inline mode.

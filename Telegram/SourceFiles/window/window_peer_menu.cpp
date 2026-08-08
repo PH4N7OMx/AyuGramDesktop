@@ -3438,9 +3438,9 @@ base::weak_qptr<Ui::BoxContent> ShowForwardMessagesBox(
 			std::move(comment),
 			options,
 			forwardOptions);
-
 		const auto items = history->owner().idsToItems(msgIds);
-		const auto ayuForwarding = AyuForward::isAyuForwardNeeded(items) || AyuForward::isFullAyuForwardNeeded(items.front());
+		const auto ayuForwarding = AyuForward::isAyuForwardNeeded(items)
+			|| AyuForward::isFullAyuForwardNeeded(items.front());
 
 		if ((!state->submit || ayuForwarding) && successCallback) {
 			successCallback();

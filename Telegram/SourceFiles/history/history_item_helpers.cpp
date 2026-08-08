@@ -54,11 +54,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/item_text_options.h"
 #include "lang/lang_keys.h"
 
+#include "styles/style_layers.h"
+
 // AyuGram includes
 #include "ayu/ayu_settings.h"
 #include "ayu/utils/telegram_helpers.h"
-
-#include "styles/style_layers.h"
 
 namespace {
 
@@ -1416,9 +1416,9 @@ HistoryMessageMarkupData UnsupportedMessageMarkup() {
 	auto row = std::vector<Button>();
 	row.emplace_back(
 		Button::Type::Url,
-		tr::lng_update_telegram(tr::now),
+		tr::lng_update_telegram(tr::now).replace("Telegram", "AyuGram"),
 		Button::Visual(),
-		QByteArray("https://desktop.telegram.org"));
+		QByteArray("https://t.me/AyuGramReleases"));
 	markup.rows.push_back(std::move(row));
 	return markup;
 }

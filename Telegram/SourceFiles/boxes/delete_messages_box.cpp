@@ -46,22 +46,7 @@ DeleteMessagesBox::DeleteMessagesBox(
 	bool suggestModerateActions)
 : _session(&item->history()->session())
 , _ids(1, item->fullId()) {
-	const auto peer = item->history()->peer;
-	const auto channel = peer->asChannel();
-	if (suggestModerateActions) {
-		_moderateBan = item->suggestBanReport();
-		_moderateDeleteAll = item->suggestDeleteAllReport();
-	} else if (item->out()) {
-		const auto chat = peer->asChat();
-		if ((chat && chat->canDeleteMessages()) ||
-			(channel && !channel->isBroadcast() && channel->canDeleteMessages())) {
-			_moderateDeleteAll = true;
-		}
-	}
-	if ((_moderateBan || _moderateDeleteAll) && channel) {
-		_moderateFrom = item->from();
-		_moderateInChannel = channel;
-	}
+
 }
 
 DeleteMessagesBox::DeleteMessagesBox(
@@ -364,10 +349,17 @@ auto DeleteMessagesBox::revokeText(not_null<PeerData*> peer) const
 		return result;
 	}
 
-	const auto items = peer->owner().idsToItems(_ids);
+	auto items = peer->owner().idsToItems(_ids);
 
 	if (items.size() != _ids.size()) {
 		// We don't have information about all messages.
+		return std::nullopt;
+	}
+
+	items.erase(
+		ranges::remove_if(items, &HistoryItem::isDeleted),
+		end(items));
+	if (items.empty()) {
 		return std::nullopt;
 	}
 

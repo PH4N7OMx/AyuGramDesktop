@@ -2457,14 +2457,18 @@ void HistoryWidget::fileChosen(ChatHelpers::FileChosen &&data) {
 				crl::guard(this, [=](
 						Api::SendOptions options,
 						TextWithTags caption) {
-					controller()->sendingAnimation().appendSending(from);
+					const auto effectiveFrom = options.scheduled
+						? Ui::MessageSendingAnimationFrom()
+						: from;
+					controller()->sendingAnimation().appendSending(
+						effectiveFrom);
 					auto messageToSend = Api::MessageToSend(
 						prepareSendAction(options));
 					messageToSend.textWithTags = std::move(caption);
 					sendExistingDocument(
 						document,
 						std::move(messageToSend),
-						from.localId);
+						effectiveFrom.localId);
 				}));
 			return;
 		}
@@ -4281,7 +4285,9 @@ void HistoryWidget::updateControlsVisibility() {
 			}
 			if (_ttlInfo) {
 				const auto was = _ttlInfo->isVisible();
-				const auto now = (!_editMsgId) && (!hideExtra) && settings.showAutoDeleteButtonInMessageField();
+				const auto now = (!_editMsgId)
+					&& (!hideExtra)
+					&& settings.showAutoDeleteButtonInMessageField();
 				if (was != now) {
 					_ttlInfo->setVisible(now);
 					rightButtonsChanged = true;

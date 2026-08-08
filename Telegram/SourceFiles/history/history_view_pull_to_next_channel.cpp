@@ -1024,10 +1024,12 @@ void PullToNextChannel::pushIndicator() {
 	_effective = effective;
 	_scroll->setContentBottomInset(std::max(0, int(base::SafeRound(
 		_jumping ? effective : (effective - _pull)))));
+	const auto hintVisible = (_parent->height()
+		> _scroll->y() + _scroll->height()) && (_pull > 0.);
 	if (_mode == Mode::History) {
 		const auto next = _next.get();
 		_indicator->setHistoryData(effective, _reached, next);
-		_hint->setData(_pull > 0., _reached, _mode, next != nullptr);
+		_hint->setData(hintVisible, _reached, _mode, next != nullptr);
 	} else if (_mode == Mode::Topic) {
 		const auto next = _nextTopic.get();
 		_indicator->setTopicData(
@@ -1035,7 +1037,7 @@ void PullToNextChannel::pushIndicator() {
 			_reached,
 			next,
 			_topicCompleted);
-		_hint->setData(_pull > 0., _reached, _mode, next != nullptr);
+		_hint->setData(hintVisible, _reached, _mode, next != nullptr);
 	}
 }
 
@@ -1053,6 +1055,8 @@ void PullToNextChannel::updateGeometry() {
 	if (bottom > top) {
 		_hint->setGeometry(_scroll->x(), top, _scroll->width(), bottom - top);
 		_hint->raise();
+	} else {
+		_hint->hideNow();
 	}
 }
 

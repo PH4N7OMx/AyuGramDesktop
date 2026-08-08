@@ -30,6 +30,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 #include "ui/widgets/popup_menu.h"
 
+
 namespace Info::Saved {
 
 namespace {
@@ -49,11 +50,13 @@ namespace {
 
 } // namespace
 
-void SetupSavedMusic(
+rpl::producer<bool> SetupSavedMusic(
 		not_null<Ui::VerticalLayout*> container,
 		not_null<Info::Controller*> controller,
 		not_null<PeerData*> peer,
 		rpl::producer<std::optional<QColor>> topBarColor) {
+	const auto hasMusic = container->lifetime().make_state<
+		rpl::variable<bool>>(false);
 	auto musicValue = Data::SavedMusic::Supported(peer->id)
 		? Data::SavedMusicList(
 			peer,
@@ -79,6 +82,7 @@ void SetupSavedMusic(
 		while (divider->entity()->count()) {
 			delete divider->entity()->widgetAt(0);
 		}
+		auto shown = false;
 		if (item) {
 			if (const auto document = item->media()
 					? item->media()->document()
@@ -143,11 +147,16 @@ void SetupSavedMusic(
 						}
 					},
 					musicButton->lifetime());
+
+				shown = true;
 			}
 			divider->show(anim::type::instant);
 		}
-	}, divider->lifetime());
+		*hasMusic = shown;
+	}, container->lifetime());
 	divider->finishAnimating();
+
+	return hasMusic->value();
 }
 
 } // namespace Info::Saved

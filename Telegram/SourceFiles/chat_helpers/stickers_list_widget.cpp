@@ -63,7 +63,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 // AyuGram includes
 #include "ayu/ayu_settings.h"
 #include "styles/style_ayu_styles.h"
-#include "boxes/abstract_box.h"
 
 
 namespace ChatHelpers {
@@ -299,7 +298,11 @@ StickersListWidget::StickersListWidget(
 			? Data::StickersType::Masks
 			: Data::StickersType::Stickers
 		) | rpl::on_next([=] {
-			refreshRecent();
+			if (underMouse()) {
+				_refreshDelayed = true;
+			} else {
+				refreshRecent();
+			}
 		}, lifetime());
 	}
 
@@ -872,6 +875,11 @@ void StickersListWidget::fillLocalSearchShortcuts(const QString &query) {
 }
 
 bool StickersListWidget::addSearchShortcut(not_null<StickersSet*> set) {
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.showOnlyAddedEmojisAndStickers()
+		&& !SetInMyList(set->flags)) {
+		return false;
+	}
 	if (ranges::contains(_searchShortcutSets, set->id, &Set::id)) {
 		return false;
 	}
@@ -2986,10 +2994,16 @@ void StickersListWidget::resizeEvent(QResizeEvent *e) {
 
 void StickersListWidget::leaveEventHook(QEvent *e) {
 	clearSelection();
+	if (base::take(_refreshDelayed)) {
+		refreshRecent();
+	}
 }
 
 void StickersListWidget::leaveToChildEvent(QEvent *e, QWidget *child) {
 	clearSelection();
+	if (base::take(_refreshDelayed)) {
+		refreshRecent();
+	}
 }
 
 void StickersListWidget::enterFromChildEvent(QEvent *e, QWidget *child) {
@@ -3267,6 +3281,7 @@ bool StickersListWidget::appendSet(
 }
 
 void StickersListWidget::refreshRecent() {
+	_refreshDelayed = false;
 	if (_section == Section::Stickers) {
 		refreshRecentStickers();
 	}
@@ -3314,10 +3329,9 @@ auto StickersListWidget::collectRecentStickers() -> std::vector<Sticker> {
 	result.reserve(cloudCount + recent.size() + customCount);
 	_custom.reserve(cloudCount + recent.size() + customCount);
 
-    const auto &settings = AyuSettings::getInstance();
-
 	auto add = [&](not_null<DocumentData*> document, bool custom) {
-		if (result.size() >= settings.recentStickersCount()) {
+		if (result.size() >= kRecentDisplayLimit
+			&& !AyuSettings::getInstance().unlimitedRecentStickers()) {
 			return;
 		}
 		const auto i = ranges::find(result, document, &Sticker::document);
@@ -3352,6 +3366,7 @@ auto StickersListWidget::collectRecentStickers() -> std::vector<Sticker> {
 }
 
 void StickersListWidget::refreshRecentStickers(bool performResize) {
+	_refreshDelayed = false;
 	clearSelection();
 
 	auto recentPack = collectRecentStickers();

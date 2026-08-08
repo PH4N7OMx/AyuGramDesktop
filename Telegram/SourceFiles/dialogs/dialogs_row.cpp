@@ -779,7 +779,7 @@ void Row::paintUserpic(
 		&& !insideCommunity;
 	if (keyChanged
 		|| !_cornerBadgeUserpic->layersManager.isFinished()
-		|| _cornerBadgeUserpic->active != active
+		|| activeChanged
 		|| _cornerBadgeUserpic->hidden != (hidden ? 1 : 0)
 		|| _cornerBadgeUserpic->frameIndex != frameIndex
 		|| _cornerBadgeUserpic->storiesCount != storiesCount

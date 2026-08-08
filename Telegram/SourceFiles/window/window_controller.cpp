@@ -409,7 +409,10 @@ void Controller::clearSetupEmailLock() {
 void Controller::setupIntro(
 		Main::Account *accountBeforeIntro,
 		QPixmap oldContentCache) {
-	_widget.setupIntro(Intro::EnterPoint::Qr, accountBeforeIntro, std::move(oldContentCache));
+	_widget.setupIntro(
+		Intro::EnterPoint::Qr,
+		accountBeforeIntro,
+		std::move(oldContentCache));
 }
 
 void Controller::setupMain(

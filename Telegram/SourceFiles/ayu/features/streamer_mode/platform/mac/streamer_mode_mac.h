@@ -6,12 +6,4 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
-namespace TapticEngine {
-namespace Impl {
-
-void generateGeneric();
-void generateAlignment();
-void generateLevelChange();
-
-}
-}
+#include "ayu/features/streamer_mode/platform/platform_streamer_mode.h"

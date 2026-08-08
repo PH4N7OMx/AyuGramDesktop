@@ -158,9 +158,11 @@ struct ResolvedReferrer {
 	} else if (id == u"use-small-msg-bubble-radius"_q) {
 		return u"ayu/messageBubbleRadius"_q;
 	} else if (id == u"unlimited-recent-stickers"_q) {
-		return u"ayu/recentStickersCount"_q;
+		return u"ayu/unlimitedRecentStickers"_q;
 	} else if (id == u"hide-ai-button"_q) {
 		return u"ayu/showAiEditorButtonInMessageField"_q;
+	} else if (id == u"unlimited-message-width"_q) {
+		return u"ayu/wideMultiplier"_q;
 	}
 	return QString();
 }
@@ -275,13 +277,14 @@ QString AddOption(
 	}, lifetime);
 
 	const auto referrer = OptionReferrer(option);
-	Button *button = nullptr;
+	const auto button = AddOptionRow(
+		inner,
+		name,
+		description,
+		(!referrer.isEmpty() || option.relevant())
+			? st::settingsButtonNoIcon
+			: st::settingsOptionDisabled);
 	if (!referrer.isEmpty()) {
-		button = AddOptionRow(
-			inner,
-			name,
-			description,
-			st::settingsButtonNoIcon);
 		button->addClickHandler([=] {
 			const auto resolved = ResolveReferrer(
 				referrer,
@@ -291,14 +294,7 @@ QString AddOption(
 			window->activate();
 		});
 	} else {
-		button = AddOptionRow(
-			inner,
-			name,
-			description,
-			(option.relevant()
-				? st::settingsButtonNoIcon
-				: st::settingsOptionDisabled)
-		)->toggleOn(toggles->events_starting_with(option.value()));
+		button->toggleOn(toggles->events_starting_with(option.value()));
 	}
 
 	if (registerHighlight) {

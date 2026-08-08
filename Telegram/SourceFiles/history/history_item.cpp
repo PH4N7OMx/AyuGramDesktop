@@ -551,20 +551,18 @@ HistoryItem::HistoryItem(
 					[](const auto &) {});
 			}
 		}
-		if (!skipSetText) {
-			if (const auto richMessage = data.vrich_message()) {
-				const auto richPage = Iv::ParseRichPage(&history->session(), *richMessage);
-				setRichPage(richPage);
-				setText(Iv::FlattenRichPageSummary(richPage));
-			} else {
-				auto textWithEntities = TextWithEntities{
-					qs(data.vmessage()),
-					Api::EntitiesFromMTP(
-						&history->session(),
-						data.ventities().value_or_empty())
-				};
-				setText(_media ? textWithEntities : EnsureNonEmpty(textWithEntities));
-			}
+		if (const auto richMessage = data.vrich_message()) {
+			const auto richPage = Iv::ParseRichPage(&history->session(), *richMessage);
+			setRichPage(richPage);
+			setText(Iv::FlattenRichPageSummary(richPage));
+		} else if (!skipSetText) {
+			auto textWithEntities = TextWithEntities{
+				qs(data.vmessage()),
+				Api::EntitiesFromMTP(
+					&history->session(),
+					data.ventities().value_or_empty())
+			};
+			setText(_media ? textWithEntities : EnsureNonEmpty(textWithEntities));
 		}
 		if (const auto groupedId = data.vgrouped_id()) {
 			setGroupId(
@@ -3071,6 +3069,7 @@ bool HistoryItem::allowsEdit(TimeId now) const {
 	if (_deleted) {
 		return false;
 	}
+
 	const auto richPageSource = Get<HistoryMessageRichPageSource>();
 	const auto richPage = BestRichPage(richPageSource);
 	return !isService()
@@ -4185,7 +4184,7 @@ void HistoryItem::applyTTL(TimeId destroyAt) {
 		const auto session = &_history->session();
 		crl::on_main(session, [session, id = fullId()]{
 			if (const auto item = session->data().message(id)) {
-				item->destroy();
+				processMessageDelete(item);
 			}
 		});
 	} else {

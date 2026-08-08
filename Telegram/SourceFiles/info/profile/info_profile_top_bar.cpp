@@ -109,6 +109,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 
 // AyuGram includes
+#include "ayu/ui/ayu_userpic.h"
 #include "ayu/utils/telegram_helpers.h"
 
 
@@ -2688,38 +2689,55 @@ void TopBar::paintUserpic(QPainter &p, const QRect &geometry) {
 		}
 	}
 	const auto key = _peer->userpicUniqueKey(_userpicView);
+	const auto ayuState = AyuUserpic::PackedState();
 	const auto overlayActive = _uploadOverlay && _uploadOverlay->shown();
 	const auto awaitingCloud = _waitingUserpicCloudLoad
 		&& !_peer->userpicCloudImage(_userpicView);
-	if (!overlayActive && !awaitingCloud && _userpicUniqueKey != key) {
+	if (!overlayActive
+		&& !awaitingCloud
+		&& (_userpicUniqueKey != key || _userpicAyuState != ayuState)) {
 		_waitingUserpicCloudLoad = false;
 		_userpicUniqueKey = key;
+		_userpicAyuState = ayuState;
 		const auto fullSize = st::infoProfileTopBarPhotoSize;
 		const auto scaled = fullSize * style::DevicePixelRatio();
 		auto image = QImage();
 		if (const auto broadcast = _peer->monoforumBroadcast()) {
+			const auto ayuOverride = AyuUserpic::ShouldOverrideShape(
+				Ui::PeerUserpicShape::Monoforum);
 			image = PeerData::GenerateUserpicImage(
 				broadcast,
 				_userpicView,
 				scaled,
-				0);
-			if (_monoforumMask.isNull()) {
-				_monoforumMask = Ui::MonoforumShapeMask(Size(scaled));
+				ayuOverride
+					? std::optional<int>(
+						AyuUserpic::ComputeRadius(scaled))
+					: std::optional<int>(0));
+			if (!ayuOverride) {
+				if (_monoforumMask.isNull()) {
+					_monoforumMask = Ui::MonoforumShapeMask(Size(scaled));
+				}
+				constexpr auto kFormat = QImage::Format_ARGB32_Premultiplied;
+				if (image.format() != kFormat) {
+					image = std::move(image).convertToFormat(kFormat);
+				}
+				auto q = QPainter(&image);
+				q.setCompositionMode(
+					QPainter::CompositionMode_DestinationIn);
+				q.drawImage(
+					Rect(image.size() / image.devicePixelRatio()),
+					_monoforumMask);
+				q.end();
 			}
-			constexpr auto kFormat = QImage::Format_ARGB32_Premultiplied;
-			if (image.format() != kFormat) {
-				image = std::move(image).convertToFormat(kFormat);
-			}
-			auto q = QPainter(&image);
-			q.setCompositionMode(QPainter::CompositionMode_DestinationIn);
-			q.drawImage(
-				Rect(image.size() / image.devicePixelRatio()),
-				_monoforumMask);
-			q.end();
 		} else {
 			const auto radius = (_source == Source::Community)
 				? std::optional<int>(
-					int(scaled * Ui::ForumUserpicRadiusMultiplier()))
+					AyuUserpic::ShouldOverrideShape(
+						Ui::PeerUserpicShape::Forum)
+						? AyuUserpic::ComputeRadius(scaled)
+						: int(
+							scaled
+							* Ui::ForumUserpicRadiusMultiplier()))
 				: std::nullopt;
 			image = PeerData::GenerateUserpicImage(
 				_peer,

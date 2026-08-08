@@ -120,7 +120,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 // AyuGram includes
 #include "ayu/ui/utils/ayu_profile_values.h"
 #include "ayu/utils/telegram_helpers.h"
-#include "base/event_filter.h"
 #include "styles/style_ayu_styles.h"
 #include "ui/widgets/tooltip.h"
 #include "ui/text/text_entity.h"
@@ -243,17 +242,6 @@ base::options::toggle ShowChannelJoinedBelowAbout({
 	return AboutValue(
 		peer
 	) | rpl::map([=](TextWithEntities &&value) {
-		if (ShowPeerIdBelowAbout.value()) {
-			using namespace Ui::Text;
-			if (!value.empty()) {
-				value.append("\n\n");
-			}
-			value.append(Italic(u"id: "_q));
-			const auto raw = peer->id.value & PeerId::kChatTypeMask;
-			value.append(Link(
-				Italic(Lang::FormatCountDecimal(raw)),
-				kPeerIdLinkIndex));
-		}
 		if (ShowChannelJoinedBelowAbout.value()) {
 			if (const auto channel = peer->asChannel()) {
 				if (!channel->amCreator() && channel->inviteDate) {
@@ -1410,10 +1398,11 @@ bool SetClickContext(
 	return false;
 }
 
-void AddRegistrationOrCreationButton(const not_null<Window::SessionController*> controller,
-									 not_null<PeerData*> peer,
-									 TextWithLabel &idInfo,
-									 const auto fitLabelToButton) {
+void AddRegistrationOrCreationButton(
+		not_null<Window::SessionController*> controller,
+		not_null<PeerData*> peer,
+		TextWithLabel &idInfo,
+		const auto &fitLabelToButton) {
 	if (peer->isBot() || peer->isServiceUser()) {
 		return;
 	}
@@ -1424,13 +1413,11 @@ void AddRegistrationOrCreationButton(const not_null<Window::SessionController*> 
 	const auto rightSkip = st::infoProfileLabeledButtonQrRightSkip;
 	fitLabelToButton(registrationDateButton, idInfo.text, rightSkip);
 	fitLabelToButton(registrationDateButton, idInfo.subtext, rightSkip);
-	registrationDateButton->setClickedCallback([=, show = controller->uiShow()]
-	{
+	registrationDateButton->setClickedCallback([=] {
 		const auto weak = QPointer<Ui::IconButton>(registrationDateButton);
 		getRegistrationDate(
 			peer,
-			[=](const TextWithEntities &result)
-			{
+			[=](const TextWithEntities &result) {
 				if (result.empty() || !weak) {
 					return;
 				}
@@ -1449,8 +1436,7 @@ void AddRegistrationOrCreationButton(const not_null<Window::SessionController*> 
 					parent,
 					weak.data(),
 					weak->rect());
-				const auto countPosition = [=](QSize size)
-				{
+				const auto countPosition = [=](QSize size) {
 					const auto left = geometry.x()
 						+ (geometry.width() - size.width()) / 2;
 					const auto right = parent->width()
@@ -1462,8 +1448,7 @@ void AddRegistrationOrCreationButton(const not_null<Window::SessionController*> 
 				tooltip->pointAt(geometry, RectPart::Top, countPosition);
 
 				const auto weakTooltip = QPointer(tooltip);
-				tooltip->setHiddenCallback([weakTooltip]
-				{
+				tooltip->setHiddenCallback([weakTooltip] {
 					if (weakTooltip) {
 						weakTooltip->deleteLater();
 					}
@@ -1472,8 +1457,7 @@ void AddRegistrationOrCreationButton(const not_null<Window::SessionController*> 
 				base::install_event_filter(
 					tooltip,
 					qApp,
-					[weakTooltip](not_null<QEvent*> e)
-					{
+					[weakTooltip](not_null<QEvent*> e) {
 						if (e->type() == QEvent::MouseButtonPress) {
 							if (weakTooltip) {
 								weakTooltip->toggleAnimated(false);
@@ -1848,7 +1832,7 @@ Section DetailsFiller::makeInfo() {
 
 		{
 			const auto dataCenter = getPeerDC(_peer);
-			const auto idLabel = dataCenter.isEmpty() ? QString("ID") : dataCenter;
+			const auto idLabel = dataCenter.isEmpty() ? u"ID"_q : dataCenter;
 
 			auto idDrawableText = IDValue(
 				user
@@ -1937,37 +1921,6 @@ Section DetailsFiller::makeInfo() {
 			});
 		}
 
-		const auto hook = [=](Ui::FlatLabel::ContextMenuRequest request)
-		{
-			if (!request.link) {
-				return;
-			}
-			const auto text = request.link->copyToClipboardContextItemText();
-			if (text.isEmpty()) {
-				return;
-			}
-			const auto link = request.link->copyToClipboardText();
-			request.menu->addAction(
-				text,
-				[=] { QGuiApplication::clipboard()->setText(link); });
-			const auto last = link.lastIndexOf('/');
-			if (last < 0) {
-				return;
-			}
-			const auto mention = '@' + link.mid(last + 1);
-			if (mention.size() < 2) {
-				return;
-			}
-			request.menu->addAction(
-				tr::lng_context_copy_mention(tr::now),
-				[=] { QGuiApplication::clipboard()->setText(mention); });
-		};
-
-		if (!_topic) {
-			linkLine.text->setContextMenuHook(hook);
-			linkLine.subtext->setContextMenuHook(hook);
-		}
-
 		if (const auto channel = _topic ? nullptr : _peer->asChannel()) {
 			auto locationText = LocationValue(
 				channel
@@ -1995,7 +1948,7 @@ Section DetailsFiller::makeInfo() {
 
 		if (!_topic) {
 			const auto dataCenter = getPeerDC(_peer);
-			const auto idLabel = dataCenter.isEmpty() ? QString("ID") : dataCenter;
+			const auto idLabel = dataCenter.isEmpty() ? u"ID"_q : dataCenter;
 
 			auto idDrawableText = IDValue(
 				_peer
@@ -2029,7 +1982,7 @@ Section DetailsFiller::makeInfo() {
 				return Ui::Text::Link(std::move(text));
 			});
 			auto idInfo = addInfoOneLine(
-				QString("ID"),
+				rpl::single(u"ID"_q),
 				std::move(idDrawableText),
 				tr::ayu_ContextCopyID(tr::now)
 			);

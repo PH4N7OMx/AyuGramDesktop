@@ -1609,10 +1609,7 @@ void LanguageBox::setupTop(not_null<Ui::VerticalLayout*> container) {
 		}
 	}
 	using namespace rpl::mappers;
-	auto premium = Data::AmPremiumValue(&_controller->session()) | rpl::map([=](bool val)
-	{
-		return true;
-	});
+	auto premium = rpl::single(true);
 	const auto translateChat = container->add(object_ptr<Ui::SettingsButton>(
 		container,
 		tr::lng_translate_settings_chat(),
@@ -1629,14 +1626,7 @@ void LanguageBox::setupTop(not_null<Ui::VerticalLayout*> container) {
 	}, translateChat->lifetime());
 
 	translateChat->toggledValue(
-	) | rpl::filter([=](bool checked) {
-		/*const auto premium = _controller->session().premium();
-		if (checked && !premium) {
-			ShowPremiumPreviewToBuy(
-				_controller,
-				PremiumFeature::RealTimeTranslation);
-			_translateChatTurnOff.fire(false);
-		}*/
+	) | rpl::filter([](bool checked) {
 		return checked != Core::App().settings().translateChatEnabled();
 	}) | rpl::on_next([=](bool checked) {
 		Core::App().settings().setTranslateChatEnabled(checked);
