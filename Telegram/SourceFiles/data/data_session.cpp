@@ -3168,6 +3168,7 @@ void Session::processMessagesDeleted(
 				processMessageDelete(item);
 			} else {
 				toDestroy.push_back(item);
+			}
 			historiesToCheck.emplace(history);
 		} else if (affected) {
 			affected->unknownMessageDeleted(messageId.v);
