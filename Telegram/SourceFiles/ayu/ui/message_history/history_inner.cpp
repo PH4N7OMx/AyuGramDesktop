@@ -1804,17 +1804,6 @@ QPoint InnerWidget::mapPointToItem(QPoint point, const Element *view) const {
 	return point - QPoint(0, itemTop(view));
 }
 
-bool InnerWidget::elementScrollToLocalY(
-		gsl::not_null<const HistoryView::Element*> view,
-		int localY) {
-	return false;
-}
-
-void InnerWidget::elementShowHiddenSenderTooltip(
-		FullMsgId context,
-		const TextWithEntities &text) {
-}
-
 InnerWidget::~InnerWidget() = default;
 
 } // namespace MessageHistory

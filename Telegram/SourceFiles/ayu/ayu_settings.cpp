@@ -423,8 +423,8 @@ void AyuSettings::load() {
 
 	settings.validate();
 
-	if (settings.streamerModeEnabled()) {
-		AyuFeatures::StreamerMode::enable();
+	if (settings.streamerMode()) {
+		AyuFeatures::StreamerMode::apply(true);
 	}
 }
 
@@ -529,7 +529,6 @@ void AyuSettings::validate() {
 
 	validateRange(_messageBubbleRadius, 0, 16, defaults._messageBubbleRadius);
 	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
-	validateRange(_recentStickersCount, 1, 200, defaults._recentStickersCount);
 	validateRange(_avatarCorners, 0, AyuUiSettings::kMaxAvatarCorners, defaults._avatarCorners);
 
 	const auto embeddedType = _messageShotSettings._embeddedThemeType.current();
