@@ -7,6 +7,7 @@
 
 #include "ayu/features/streamer_mode/streamer_mode.h"
 
+#include "ayu/ayu_settings.h"
 #include "ayu/features/streamer_mode/platform/platform_streamer_mode.h"
 #include "core/application.h"
 #include "window/window_controller.h"
@@ -16,6 +17,10 @@
 #include <QtWidgets/QWidget>
 
 namespace AyuFeatures::StreamerMode {
+
+bool isEnabled() {
+	return AyuSettings::getInstance().streamerMode();
+}
 
 namespace {
 
