@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
@@ -37,9 +37,12 @@ jobs:
         run: |
           sudo apt update
           curl -sSL https://install.python-poetry.org | python3 -
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
           curl -sSL https://github.com/ccache/ccache/releases/download/v4.13.6/ccache-4.13.6-linux-x86_64-glibc.tar.xz \
           | sudo tar xJ -C /usr/local/bin --strip-components=1 ccache-4.13.6-linux-x86_64-glibc/ccache
           echo "CCACHE_DIR=$RUNNER_TEMP/.tdesktop-cache" >> $GITHUB_ENV
+          mkdir -p "$RUNNER_TEMP/.tdesktop-cache"
           cd Telegram/build/docker/centos_env
           poetry install
           DOCKERFILE=$(DEBUG= LTO= poetry run gen_dockerfile)
@@ -54,10 +57,10 @@ jobs:
             ${{ runner.os }}-linux-ccache-
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
           context: Telegram/build/docker/centos_env
           load: true
@@ -66,6 +69,7 @@ jobs:
       - name: Build Telegram Desktop
         run: |
           rm -rf out/Debug/gen/lang_subsets out/Release/gen/lang_subsets out/Debug/Telegram/gen/lang_subsets out/Release/Telegram/gen/lang_subsets
+          mkdir -p "${{ env.CCACHE_DIR }}"
           docker run --rm \
           -u $(id -u) \
           -v $PWD:/usr/src/tdesktop \
@@ -116,7 +120,7 @@ jobs:
       PREPARE_PATH: "Telegram/build/prepare/prepare.py"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
@@ -169,7 +173,9 @@ jobs:
         id: cache-libs
         uses: actions/cache@v4
         with:
-          path: Libraries
+          path: |
+            Libraries
+            ${{ github.workspace }}/../Libraries
           key: ${{ runner.os }}-libs-${{ hashFiles('Telegram/build/prepare/prepare.py') }}
 
       - name: Prepare libraries
@@ -184,7 +190,7 @@ jobs:
       - name: Configure
         run: |
           XCODE_VER=$(xcodebuild -version | awk 'NR==1{print $2}' | cut -d. -f1)
-          EXTRA_FLAGS="-GNinja -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_OSX_ARCHITECTURES=arm64"
+          EXTRA_FLAGS="-GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_OSX_ARCHITECTURES=arm64"
           if [ "$XCODE_VER" -lt 16 ]; then
             echo "Xcode version is < 16 ($XCODE_VER), disabling Swift 6..."
             EXTRA_FLAGS="$EXTRA_FLAGS -DDESKTOP_APP_DISABLE_SWIFT6=ON"

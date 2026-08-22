@@ -63,17 +63,17 @@ std::pair<QString, QString> stateName(const PeerId &id) {
 	const auto state = fwState->second;
 
 	QString messagesString = tr::ayu_AyuForwardStatusSentCount(tr::now,
-															   lt_item1,
+															   lt_count1,
 															   QString::number(state->sentMessages),
-															   lt_item2,
+															   lt_count2,
 															   QString::number(state->totalMessages)
 
 	);
 
 	QString chunkString = tr::ayu_AyuForwardStatusChunkCount(tr::now,
-															 lt_item1,
+															 lt_count1,
 															 QString::number(state->currentChunk + 1),
-															 lt_item2,
+															 lt_count2,
 															 QString::number(state->totalChunks)
 	);
 

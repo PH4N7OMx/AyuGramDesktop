@@ -51,6 +51,9 @@ if "!VCVARS_ARGS!"=="" (
 )
 
 :: 3. Find Python and add to PATH if not already present
+if exist "%LocalAppData%\Programs\Python\Python313\python.exe" (
+    set "PATH=%LocalAppData%\Programs\Python\Python313;%LocalAppData%\Programs\Python\Python313\Scripts;!PATH!"
+)
 where python >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo Python not found in system PATH. Searching standard folders...
@@ -66,12 +69,8 @@ if %ERRORLEVEL% neq 0 (
 where python >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Python not found. Please install Python and add it to PATH.
-    pause
+    if "%1" neq "nopause" pause
     exit /b 1
-)
-
-if exist "%LocalAppData%\Programs\Python\Python313\python.exe" (
-    set "PATH=%LocalAppData%\Programs\Python\Python313;%LocalAppData%\Programs\Python\Python313\Scripts;!PATH!"
 )
 
 :: 4. Run Win.bat dependency preparation if Libraries doesn't exist
@@ -83,7 +82,7 @@ echo ==================================================
 call Telegram\build\prepare\win.bat silent
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Dependency preparation failed.
-    pause
+    if "%1" neq "nopause" pause
     exit /b %ERRORLEVEL%
 )
 goto configure
@@ -100,7 +99,7 @@ echo ==================================================
 call Telegram\configure.bat x64 -D TDESKTOP_API_ID=2040 -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Configuration failed.
-    pause
+    if "%1" neq "nopause" pause
     exit /b %ERRORLEVEL%
 )
 
@@ -111,7 +110,7 @@ echo ==================================================
 cmake --build out --config Release
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Build failed.
-    pause
+    if "%1" neq "nopause" pause
     exit /b %ERRORLEVEL%
 )
 
@@ -119,4 +118,4 @@ echo ==================================================
 echo AyuGram compiled successfully!
 echo The executable is located at: out\Release\AyuGram.exe
 echo ==================================================
-pause
+if "%1" neq "nopause" pause

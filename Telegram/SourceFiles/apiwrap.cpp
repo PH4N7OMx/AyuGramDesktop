@@ -5334,6 +5334,7 @@ void ApiWrap::sendMediaWithRandomId(
 		const MTPInputMedia &media,
 		Api::SendOptions options,
 		uint64 randomId,
+		Fn<void(bool)> done) {
 	applyGhostScheduling(_session, options);
 	if (options.welcomeTemplate) {
 		const auto owned = _session->welcomeMessages().owns(item);

@@ -552,32 +552,34 @@ HistoryItem::HistoryItem(
 		createComponents(data);
 		if (media) {
 			setMedia(*media);
-			if (checked == MediaCheckResult::HasUnsupportedTimeToLive) {
-				media->match(
-					[&](const MTPDmessageMediaPhoto &media)
-					{
+			media->match(
+				[&](const MTPDmessageMediaPhoto &media)
+				{
+					if (const auto ttl = media.vttl_seconds()) {
 						if (!data.is_media_unread()) {
 							createServiceFromMtp(data);
 							skipSetText = true;
 						}
 
-						const auto time = media.vttl_seconds()->v;
+						const auto time = ttl->v;
 						setAyuHint(formatTTL(time, false));
 						_unsupportedTTL = time;
-					},
-					[&](const MTPDmessageMediaDocument &media)
-					{
+					}
+				},
+				[&](const MTPDmessageMediaDocument &media)
+				{
+					if (const auto ttl = media.vttl_seconds()) {
 						if (!data.is_media_unread()) {
 							createServiceFromMtp(data);
 							skipSetText = true;
 						}
 
-						const auto time = media.vttl_seconds()->v;
+						const auto time = ttl->v;
 						setAyuHint(formatTTL(time, true));
 						_unsupportedTTL = time;
-					},
-					[](const auto &) {});
-			}
+					}
+				},
+				[](const auto &) {});
 		}
 		if (const auto media = _media.get()) {
 			if (media->ttlSeconds()
