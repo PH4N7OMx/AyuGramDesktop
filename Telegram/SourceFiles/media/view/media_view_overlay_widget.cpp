@@ -1367,6 +1367,11 @@ void OverlayWidget::markTimedMediaRead() {
 	if (!item || !item->isTtlCoveredMedia()) {
 		return;
 	} else if (item->isIncomingUnreadMedia()) {
+		const auto &ghost = AyuSettings::ghost(&item->history()->session());
+		if (!ghost.sendReadMessages()) {
+			item->markContentsRead(true);
+			return;
+		}
 		item->history()->session().api().markContentsRead(item);
 	}
 }
