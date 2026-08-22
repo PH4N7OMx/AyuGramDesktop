@@ -8924,7 +8924,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_ImportModeReplace" = "Replace existing";
 "ayu_ImportModeMerge" = "Merge messages";
 "ayu_ImportMergeProgress" = "Merging messages...";
-"ayu_ImportMergeSuccess" = "Imported {count} messages.";
+"ayu_ImportMergeSuccess" = "Imported {count1} messages.";
 "ayu_RegexFilters" = "Message Filters";
 "ayu_RegexFiltersAmount#one" = "{count} filter";
 "ayu_RegexFiltersAmount#other" = "{count} filters";
