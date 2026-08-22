@@ -19,6 +19,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/ui_integration.h"
 #include "lang/lang_keys.h"
 #include "history/history_item_components.h"
+#include "history/history_item_helpers.h"
 #include "history/history_item.h"
 #include "history/history.h"
 #include "history/view/media/history_view_media.h"
@@ -444,7 +445,7 @@ void BottomInfo::paintEffect(
 		x += width + add;
 		widthLeft -= width + add;
 	}
-	if (!animations.empty()) {
+	if (!animations.empty() && context.reactionInfo) {
 		const auto now = context.now;
 		context.reactionInfo->effectPaint = [
 			now,
@@ -491,16 +492,21 @@ void BottomInfo::layout() {
 
 void BottomInfo::layoutDateText() {
 	const auto &settings = AyuSettings::getInstance();
-	const auto editedPrimary = (_data.flags & Data::Flag::EditedPrimary)
-		&& !(_data.flags & Data::Flag::ForwardedDate);
 
 	if (!settings.replaceBottomInfoWithIcons()) {
+		const auto updated = (_data.flags & Data::Flag::Updated);
+		const auto editedPrimary = !updated
+			&& (_data.flags & Data::Flag::EditedPrimary)
+			&& !(_data.flags & Data::Flag::ForwardedDate);
+
 		const auto deleted = (_data.flags & Data::Flag::AyuDeleted)
 			? (settings.deletedMark() + ' ')
 			: QString();
 
 		const auto edited = editedPrimary
 			? QString()
+			: updated
+			? (tr::lng_ephemeral_updated(tr::now) + ' ')
 			: (_data.flags & Data::Flag::Edited)
 			? (settings.editedMark() + ' ')
 			: (_data.flags & Data::Flag::EstimateDate)
@@ -564,13 +570,20 @@ void BottomInfo::layoutDateText() {
 			Ui::NameTextOptions(),
 			helper.context());
 	} else {
+		const auto updated = (_data.flags & Data::Flag::Updated);
+		const auto editedPrimary = !updated
+			&& (_data.flags & Data::Flag::EditedPrimary)
+			&& !(_data.flags & Data::Flag::ForwardedDate);
 		const auto editedIcon = !editedPrimary
+			&& !updated
 			&& (_data.flags & Data::Flag::Edited);
 
 		TextWithEntities edited;
 		if (editedIcon) {
 			edited = Ui::Text::IconEmoji(&st::editedIcon);
 			edited.append(' ');
+		} else if (updated) {
+			edited = TextWithEntities{ tr::lng_ephemeral_updated(tr::now) + ' ' };
 		} else if (!editedPrimary && (_data.flags & Data::Flag::EstimateDate)) {
 			edited = TextWithEntities{ tr::lng_approximate(tr::now) + ' ' };
 		} else if (!editedPrimary && _data.scheduleRepeatPeriod) {
@@ -809,6 +822,9 @@ struct BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 			result.flags |= Flag::EditedPrimary;
 			result.editedDate = base::unixtime::parse(editedDate);
 		}
+	}
+	if (IsAnchoredEphemeral(item)) {
+		result.flags |= Flag::Updated;
 	}
 	if (const auto views = item->Get<HistoryMessageViews>()) {
 		if (views->views.count >= 0) {

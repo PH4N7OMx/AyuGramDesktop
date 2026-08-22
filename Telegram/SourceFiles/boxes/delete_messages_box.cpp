@@ -187,7 +187,9 @@ void DeleteMessagesBox::prepare() {
 			: tr::lng_selected_delete_sure(tr::now, lt_count, _ids.size());
 		if (const auto peer = checkFromSinglePeer()) {
 			auto count = int(_ids.size());
-			if (hasScheduledMessages() || hasSavedMusicMessages()) {
+			if (hasScheduledMessages()
+				|| hasWelcomeTemplateMessages()
+				|| hasSavedMusicMessages()) {
 			} else if (auto revoke = revokeText(peer)) {
 				const auto &settings = Core::App().settings();
 				const auto revokeByDefault
@@ -305,6 +307,17 @@ bool DeleteMessagesBox::hasScheduledMessages() const {
 	return false;
 }
 
+bool DeleteMessagesBox::hasWelcomeTemplateMessages() const {
+	for (const auto &fullId : _ids) {
+		if (const auto item = _session->data().message(fullId)) {
+			if (item->isWelcomeTemplate()) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 bool DeleteMessagesBox::hasSavedMusicMessages() const {
 	for (const auto &fullId : _ids) {
 		if (const auto item = _session->data().message(fullId)) {
@@ -353,6 +366,14 @@ auto DeleteMessagesBox::revokeText(not_null<PeerData*> peer) const
 
 	if (items.size() != _ids.size()) {
 		// We don't have information about all messages.
+		return std::nullopt;
+	}
+	items.erase(
+		ranges::remove_if(items, [](not_null<HistoryItem*> item) {
+			return item->isEphemeral();
+		}),
+		end(items));
+	if (items.empty()) {
 		return std::nullopt;
 	}
 
