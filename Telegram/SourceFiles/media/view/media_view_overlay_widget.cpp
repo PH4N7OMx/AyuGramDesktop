@@ -138,6 +138,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_state.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ayu/utils/telegram_helpers.h"
 
 
 namespace Media {
@@ -1379,6 +1380,9 @@ void OverlayWidget::markTimedMediaRead() {
 void OverlayWidget::checkSingleViewMediaBurn() {
 	const auto item = _message;
 	if (!item || item->out()) {
+		return;
+	}
+	if (isMessageSavable(item)) {
 		return;
 	}
 	const auto media = item->media();

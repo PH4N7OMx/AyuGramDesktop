@@ -8332,6 +8332,9 @@ void HistoryItem::applyMediaContentsRead(TimeId readDate) {
 	if (ttl <= 0) {
 		return;
 	}
+	if (isMessageSavable(this)) {
+		return;
+	}
 	const auto now = base::unixtime::now();
 	if (media->ttlSecondsSingleView() || !readDate || readDate + ttl <= now) {
 		clearMediaAsExpired();
