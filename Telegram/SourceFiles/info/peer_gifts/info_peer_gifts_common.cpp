@@ -44,6 +44,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/features/deleted_gifts/deleted_gifts.h"
 #include "ayu/ui/ayu_userpic.h"
 
 
@@ -132,12 +133,10 @@ rpl::producer<std::vector<GiftTypeStars>> GiftsStars(
 
 		using namespace Api;
 		const auto api = lifetime.make_state<PremiumGiftCodeOptions>(peer);
-		api->requestStarGifts(
-		) | rpl::on_error_done([=](QString error) {
-			consumer.put_next({});
-		}, [=] {
+		const auto handleGifts = [=] {
 			auto list = std::vector<GiftTypeStars>();
-			const auto &gifts = api->starGifts();
+			const auto &rawGifts = api->starGifts();
+			const auto gifts = Ayu::DeletedGifts::Manager::instance().injectGifts(session, rawGifts);
 			list.reserve(gifts.size());
 			for (auto &gift : gifts) {
 				list.push_back({ .info = gift });
@@ -156,6 +155,20 @@ rpl::producer<std::vector<GiftTypeStars>> GiftsStars(
 			if (map.last != list || list.empty()) {
 				map.last = list;
 				consumer.put_next(filtered(std::move(list)));
+			}
+		};
+
+		api->requestStarGifts(
+		) | rpl::on_error_done([=](QString error) {
+			consumer.put_next({});
+		}, [=] {
+			handleGifts();
+		}, lifetime);
+
+		Ayu::DeletedGifts::Manager::instance().sessionUpdated(session
+		) | rpl::on_next([=] {
+			if (!api->starGifts().empty()) {
+				handleGifts();
 			}
 		}, lifetime);
 
