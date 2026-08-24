@@ -1109,6 +1109,7 @@ void AyuSettings::setSingleCornerRadius(bool val) {
 void AyuSettings::setCollapseDuplicates(bool val) {
 	if (_collapseDuplicates.current() == val) return;
 	_collapseDuplicates = val;
+	FiltersCacheController::fireUpdate();
 	repaintApp();
 	save();
 }

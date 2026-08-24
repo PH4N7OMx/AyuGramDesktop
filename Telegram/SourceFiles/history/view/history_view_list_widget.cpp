@@ -5796,7 +5796,8 @@ void ListWidget::itemRemoved(not_null<const HistoryItem*> item) {
 	saveScrollState();
 	const auto guard = gsl::finally([&] {
 		restoreScrollState();
-		if (AyuSettings::getInstance().collapseDuplicates()) {
+		const auto &settings = AyuSettings::getInstance();
+		if (settings.filtersEnabled() && settings.collapseDuplicates()) {
 			_delegate->listScrollTo(savedTop);
 		}
 	});

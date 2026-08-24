@@ -98,8 +98,7 @@ rpl::producer<bool> SetupSavedMusic(
 							window->showSection(Info::Saved::MakeMusic(peer));
 						})));
 
-				musicButton->setDuration(250);
-				musicButton->toggle(true, anim::type::normal);
+				musicButton->show(anim::type::instant);
 				musicButton->entity()->setAcceptBoth(true);
 				musicButton->entity()->clicks() | rpl::filter([=](Qt::MouseButton mouseButton)
 				{

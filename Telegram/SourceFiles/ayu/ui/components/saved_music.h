@@ -6,6 +6,7 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
+#include "ui/effects/animations.h"
 #include "ui/widgets/buttons.h"
 
 namespace Ui {
@@ -24,7 +25,7 @@ struct ResultCover
 {
 	QPixmap pix;
 	QColor bg;
-	bool noCover;
+	bool noCover = false;
 };
 
 class AyuMusicButton final : public Ui::RippleButton
@@ -41,7 +42,9 @@ public:
 
 private:
 	void downloadAndMakeCover(FullMsgId msgId);
-	void makeCover();
+	void makeCover(uint64 requestId);
+	void applyCover(ResultCover cover);
+	void applyTextColors(const ResultCover &cover);
 
 	void paintEvent(QPaintEvent *e) override;
 	int resizeGetHeight(int newWidth) override;
@@ -50,12 +53,15 @@ private:
 	std::unique_ptr<Ui::FlatLabel> _title;
 	std::shared_ptr<Data::DocumentMedia> _mediaView;
 	std::optional<ResultCover> _currentCover;
+	std::optional<ResultCover> _previousCover;
+	Ui::Animations::Simple _coverAnimation;
 	rpl::event_stream<> _onReady;
 
 	QString _performerText;
 	QString _titleText;
 
 	std::optional<QColor> _overrideBg;
+	uint64 _coverRequestId = 0;
 
 };
 

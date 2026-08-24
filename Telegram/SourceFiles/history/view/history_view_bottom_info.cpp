@@ -789,9 +789,7 @@ struct BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	auto result = BottomInfo::Data();
 	result.date = message->dateTime();
 	result.effectId = item->effectId();
-	if (AyuSettings::getInstance().collapseDuplicates()) {
-		result.repeatCount = FiltersController::countDuplicateGroupSize(item);
-	}
+	result.repeatCount = FiltersController::countDuplicateGroupSize(item);
 	if (message->hasOutLayout()) {
 		result.flags |= Flag::OutLayout;
 	}

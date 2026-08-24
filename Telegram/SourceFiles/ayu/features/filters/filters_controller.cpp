@@ -162,108 +162,174 @@ bool isBlocked(const not_null<PeerData*> peer) {
 	);
 }
 
-static base::flat_set<not_null<const HistoryItem*>> notifiedDuplicates;
-static const HistoryItem *s_removingItem = nullptr;
+namespace {
 
-const HistoryItem *removingItem() {
-	return s_removingItem;
+constexpr auto kDuplicateFastLookupLimit = 200;
+constexpr auto kMaxTrackedDuplicates = 2000;
+
+enum class DuplicateLookupDirection {
+	Previous,
+	Next,
+};
+
+base::flat_set<FullMsgId> notifiedDuplicates;
+base::flat_set<FullMsgId> removingDuplicates;
+
+[[nodiscard]] bool DuplicateCollapsingEnabled(
+		not_null<const HistoryItem*> item) {
+	const auto peer = item->history()->peer;
+	return AyuSettings::getInstance().collapseDuplicates()
+		&& isEnabled(peer)
+		&& !showingFilteredMessages.contains(peer->id.value);
 }
 
-const HistoryItem *getPreviousNonService(const not_null<const HistoryItem*> item) {
+[[nodiscard]] bool IsRemoving(not_null<const HistoryItem*> item) {
+	return removingDuplicates.contains(item->fullId());
+}
+
+[[nodiscard]] bool IsDuplicateCandidate(
+		not_null<const HistoryItem*> item) {
+	return DuplicateCollapsingEnabled(item)
+		&& !IsRemoving(item)
+		&& !item->isService()
+		&& (item->id > 0)
+		&& !item->originalText().text.isEmpty();
+}
+
+[[nodiscard]] bool SameDuplicateContent(
+		not_null<const HistoryItem*> first,
+		not_null<const HistoryItem*> second) {
+	return first->from() == second->from()
+		&& first->originalText() == second->originalText()
+		&& first->replyTo() == second->replyTo();
+}
+
+[[nodiscard]] HistoryItem *LookupClosestLoadedMessage(
+		not_null<const HistoryItem*> item,
+		DuplicateLookupDirection direction) {
+	auto result = static_cast<HistoryItem*>(nullptr);
+	for (const auto &entry : item->history()->items()) {
+		const auto candidate = entry.get();
+		if (candidate == item.get()
+			|| candidate->id <= 0
+			|| IsRemoving(candidate)
+			|| candidate->isService()) {
+			continue;
+		}
+		if (direction == DuplicateLookupDirection::Previous) {
+			if (candidate->id < item->id
+				&& (!result || candidate->id > result->id)) {
+				result = candidate;
+			}
+		} else if (candidate->id > item->id
+			&& (!result || candidate->id < result->id)) {
+			result = candidate;
+		}
+	}
+	return result;
+}
+
+[[nodiscard]] HistoryItem *LookupAdjacentMessage(
+		not_null<const HistoryItem*> item,
+		DuplicateLookupDirection direction) {
 	if (item->id <= 0) {
 		return nullptr;
 	}
-	const auto history = item->history();
-	const auto peerId = history->peer->id;
-	const auto &owner = history->owner();
-
-	for (auto id = item->id - 1; id >= item->id - 200 && id > 0; --id) {
-		if (const auto prev = owner.message(peerId, id)) {
-			if (prev == s_removingItem || prev->isService()) {
-				continue;
-			}
-			return prev;
+	const auto peerId = item->history()->peer->id;
+	const auto &owner = item->history()->owner();
+	for (auto offset = 1; offset <= kDuplicateFastLookupLimit; ++offset) {
+		const auto id = (direction == DuplicateLookupDirection::Previous)
+			? (item->id - offset)
+			: (item->id + offset);
+		if (id <= 0) {
+			break;
 		}
+		const auto adjacent = owner.message(peerId, id);
+		if (!adjacent || IsRemoving(adjacent) || adjacent->isService()) {
+			continue;
+		}
+		return adjacent;
 	}
-	return nullptr;
+	return LookupClosestLoadedMessage(item, direction);
 }
 
-const HistoryItem *getDuplicateHead(const not_null<const HistoryItem*> item) {
-	if (item.get() == s_removingItem || !AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
+void NotifyDuplicateHead(
+		not_null<const HistoryItem*> duplicate,
+		not_null<const HistoryItem*> head) {
+	const auto duplicateId = duplicate->fullId();
+	if (notifiedDuplicates.contains(duplicateId)) {
+		return;
+	}
+	if (notifiedDuplicates.size() >= kMaxTrackedDuplicates) {
+		notifiedDuplicates.clear();
+	}
+	notifiedDuplicates.emplace(duplicateId);
+
+	const auto owner = &head->history()->owner();
+	const auto headId = head->fullId();
+	crl::on_main([=] {
+		if (const auto current = owner->message(headId)) {
+			owner->requestItemViewRefresh(current);
+		}
+	});
+}
+
+} // namespace
+
+const HistoryItem *getDuplicateHead(
+		const not_null<const HistoryItem*> item) {
+	if (!IsDuplicateCandidate(item)) {
 		return nullptr;
 	}
-	const QString text = item->originalText().text;
-	if (text.isEmpty()) {
+	const auto previous = LookupAdjacentMessage(
+		item,
+		DuplicateLookupDirection::Previous);
+	if (!previous || !SameDuplicateContent(previous, item)) {
 		return nullptr;
 	}
 
-	const auto prev = getPreviousNonService(item);
-	if (!prev || prev == s_removingItem) {
-		return nullptr;
-	}
-
-	if (prev->from() != item->from() || prev->originalText().text != text) {
-		return nullptr;
-	}
-
-	const HistoryItem *head = prev;
-	while (const auto earlier = getPreviousNonService(head)) {
-		if (earlier == s_removingItem) {
+	auto head = static_cast<const HistoryItem*>(previous);
+	while (const auto earlier = LookupAdjacentMessage(
+			head,
+			DuplicateLookupDirection::Previous)) {
+		if (!SameDuplicateContent(earlier, item)) {
 			break;
 		}
-		if (earlier->from() == item->from() && earlier->originalText().text == text) {
-			head = earlier;
-		} else {
-			break;
-		}
+		head = earlier;
 	}
-
 	return head;
 }
 
 bool isDuplicateMessage(const not_null<HistoryItem*> item) {
-	if (item.get() == s_removingItem || !AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
+	const auto head = getDuplicateHead(item);
+	if (!head) {
 		return false;
 	}
-	return (getDuplicateHead(item) != nullptr);
+	NotifyDuplicateHead(item, head);
+	return true;
 }
 
-std::vector<not_null<HistoryItem*>> getDuplicateGroup(not_null<HistoryItem*> item) {
-	std::vector<not_null<HistoryItem*>> result;
-	if (!AyuSettings::getInstance().collapseDuplicates() || item->isService()) {
-		result.push_back(item);
-		return result;
-	}
-	const QString text = item->originalText().text;
-	if (text.isEmpty()) {
+std::vector<not_null<HistoryItem*>> getDuplicateGroup(
+		not_null<HistoryItem*> item) {
+	auto result = std::vector<not_null<HistoryItem*>>();
+	if (!IsDuplicateCandidate(item)) {
 		result.push_back(item);
 		return result;
 	}
 
 	const auto head = getDuplicateHead(item);
-	const auto realHead = head ? const_cast<HistoryItem*>(head) : item.get();
+	const auto first = head ? const_cast<HistoryItem*>(head) : item.get();
+	result.push_back(first);
 
-	result.push_back(realHead);
-
-	if (realHead->id > 0) {
-		const auto history = realHead->history();
-		const auto peerId = history->peer->id;
-		const auto &owner = history->owner();
-
-		for (auto id = realHead->id + 1; id <= realHead->id + 200; ++id) {
-			if (const auto next = owner.message(peerId, id)) {
-				if (next == s_removingItem || next->isService()) {
-					continue;
-				}
-				if (next->from() == realHead->from() && next->originalText().text == text) {
-					result.push_back(next);
-				} else {
-					break;
-				}
-			}
-		}
+	for (auto next = LookupAdjacentMessage(
+			first,
+			DuplicateLookupDirection::Next);
+		next && SameDuplicateContent(first, next);
+		next = LookupAdjacentMessage(
+			next,
+			DuplicateLookupDirection::Next)) {
+		result.push_back(next);
 	}
-
 	return result;
 }
 
@@ -272,27 +338,37 @@ int countDuplicateGroupSize(const not_null<HistoryItem*> item) {
 }
 
 void handleDuplicateItemRemoved(not_null<const HistoryItem*> item) {
-	s_removingItem = item.get();
-	notifiedDuplicates.remove(item);
-
-	const auto history = item->history();
-	const auto group = getDuplicateGroup(const_cast<HistoryItem*>(item.get()));
-
-	HistoryItem *nextHead = nullptr;
-	if (!group.empty() && group.front() == item.get() && group.size() > 1) {
-		nextHead = group[1];
+	const auto itemId = item->fullId();
+	notifiedDuplicates.remove(itemId);
+	if (!DuplicateCollapsingEnabled(item)) {
+		return;
 	}
 
-	if (nextHead) {
-		notifiedDuplicates.remove(nextHead);
-		const auto nextHeadPtr = nextHead;
-		crl::on_main([=] {
-			s_removingItem = nullptr;
-			nextHeadPtr->history()->owner().requestItemViewRefresh(nextHeadPtr);
-		});
-	} else {
-		crl::on_main([] { s_removingItem = nullptr; });
+	removingDuplicates.emplace(itemId);
+	const auto previous = LookupAdjacentMessage(
+		item,
+		DuplicateLookupDirection::Previous);
+	const auto next = LookupAdjacentMessage(
+		item,
+		DuplicateLookupDirection::Next);
+	auto head = static_cast<const HistoryItem*>(nullptr);
+	if (previous && SameDuplicateContent(previous, item)) {
+		head = getDuplicateHead(previous);
+		if (!head) {
+			head = previous;
+		}
+	} else if (next && SameDuplicateContent(next, item)) {
+		head = next;
 	}
+
+	const auto owner = &item->history()->owner();
+	const auto headId = head ? head->fullId() : FullMsgId();
+	crl::on_main([=] {
+		removingDuplicates.remove(itemId);
+		if (const auto current = owner->message(headId)) {
+			owner->requestItemViewRefresh(current);
+		}
+	});
 }
 
 bool isBlockedOrRegexFiltered(const not_null<HistoryItem*> item) {
@@ -342,7 +418,7 @@ bool filtered(const not_null<HistoryItem*> item) {
 
 	if (!isEnabled(item->history()->peer)) return false;
 
-	if (settings.collapseDuplicates() && isDuplicateMessage(item)) {
+	if (isDuplicateMessage(item)) {
 		return true;
 	}
 
