@@ -192,8 +192,6 @@ Application::Application()
 
 	_platformIntegration->init();
 
-	_screenshotProtection->addReason(passcodeLockValue());
-
 	passcodeLockChanges(
 	) | rpl::on_next([=](bool locked) {
 		_shouldLockAt = 0;
@@ -1794,7 +1792,8 @@ bool Application::closeActiveWindow() {
 		return true;
 	} else if (_iv->closeActive()
 		|| Iv::Editor::CloseActiveWindow()
-		|| calls().closeCurrentActiveCall()) {
+		|| calls().closeCurrentActiveCall()
+		|| (_savedWindows && _savedWindows->closeActiveShell())) {
 		return true;
 	} else if (const auto window = activeWindow()) {
 		if (window->widget()->isActive()) {

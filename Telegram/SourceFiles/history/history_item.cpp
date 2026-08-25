@@ -8287,7 +8287,7 @@ void HistoryItem::processAction(const MTPMessageAction &action) {
 void HistoryItem::setSelfDestruct(
 		HistorySelfDestructType type,
 		TimeId ttlSeconds) {
-	UpdateComponents(HistoryServiceSelfDestruct::Bit());
+	AddComponents(HistoryServiceSelfDestruct::Bit());
 	const auto selfdestruct = Get<HistoryServiceSelfDestruct>();
 	if (ttlSeconds == TimeId(0x7FFFFFFF)) {
 		selfdestruct->timeToLive = TimeToLiveSingleView();
@@ -8341,7 +8341,7 @@ void HistoryItem::applyMediaContentsRead(TimeId readDate) {
 	if (media->ttlSecondsSingleView() || !readDate || readDate + ttl <= now) {
 		clearMediaAsExpired();
 	} else {
-		UpdateComponents(HistoryServiceSelfDestruct::Bit());
+		AddComponents(HistoryServiceSelfDestruct::Bit());
 		const auto selfdestruct = Get<HistoryServiceSelfDestruct>();
 		selfdestruct->timeToLive = ttl;
 		selfdestruct->type = media->document()
