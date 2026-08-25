@@ -1516,8 +1516,10 @@ win:
         -DTG_ANGLE_SPECIAL_TARGET=%SPECIAL_TARGET% ^
         -DTG_ANGLE_ZLIB_INCLUDE_PATH=%LIBS_DIR%/zlib
     cmake --build out --config Debug
+    if exist out\\CMakeFiles\\tg_angle.dir\\Debug\\tg_angle.pdb copy /y out\\CMakeFiles\\tg_angle.dir\\Debug\\tg_angle.pdb out\\Debug\\
 release:
     cmake --build out --config Release
+    if exist out\\CMakeFiles\\tg_angle.dir\\Release\\tg_angle.pdb copy /y out\\CMakeFiles\\tg_angle.dir\\Release\\tg_angle.pdb out\\Release\\
 """)
 
     stage('qt_' + qt, """
