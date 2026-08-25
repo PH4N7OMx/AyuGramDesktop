@@ -25,18 +25,18 @@
 - Consumes: upstream commit `df4a4fb7a4645dbbe17e90ec4ca502723c006fb2` from `https://github.com/desktop-app/lib_ui.git`
 - Produces: merged commit on branch `master-ui` in `lib_ui` repository containing both upstream v7.1.2 fixes and AyuGram hooks.
 
-- [ ] **Step 1: Fetch upstream in `lib_ui`**
+- [x] **Step 1: Fetch upstream in `lib_ui`**
 ```bash
 git -C c:/Users/aver/Desktop/ayu/lib_ui fetch https://github.com/desktop-app/lib_ui.git master
 ```
 
-- [ ] **Step 2: Merge upstream commit into `master-ui` in `lib_ui`**
+- [x] **Step 2: Merge upstream commit into `master-ui` in `lib_ui`**
 ```bash
 git -C c:/Users/aver/Desktop/ayu/lib_ui checkout master-ui
 git -C c:/Users/aver/Desktop/ayu/lib_ui merge df4a4fb7a4645dbbe17e90ec4ca502723c006fb2 -m "Merge upstream changes (v7.1.2) into master-ui"
 ```
 
-- [ ] **Step 3: Update `Telegram/lib_ui` submodule in `AyuGramDesktop-dev` to the merged commit**
+- [x] **Step 3: Update `Telegram/lib_ui` submodule in `AyuGramDesktop-dev` to the merged commit**
 ```bash
 git -C c:/Users/aver/Desktop/ayu/AyuGramDesktop-dev/Telegram/lib_ui fetch c:/Users/aver/Desktop/ayu/lib_ui master-ui
 git -C c:/Users/aver/Desktop/ayu/AyuGramDesktop-dev/Telegram/lib_ui checkout FETCH_HEAD
@@ -59,17 +59,17 @@ git -C c:/Users/aver/Desktop/ayu/AyuGramDesktop-dev/Telegram/lib_ui checkout FET
 - Consumes: git tag `v7.1.2` from `tdesktop` remote.
 - Produces: clean merge commit `Merge tag 'v7.1.2' into dev` in `AyuGramDesktop-dev`.
 
-- [ ] **Step 1: Start merge of tag `v7.1.2`**
+- [x] **Step 1: Start merge of tag `v7.1.2`**
 ```bash
 git -C c:/Users/aver/Desktop/ayu/AyuGramDesktop-dev merge --no-commit --no-ff v7.1.2
 ```
 
-- [ ] **Step 2: Resolve `.github/workflows` conflicts by deleting upstream files**
+- [x] **Step 2: Resolve `.github/workflows` conflicts by deleting upstream files**
 ```bash
 git -C c:/Users/aver/Desktop/ayu/AyuGramDesktop-dev rm .github/workflows/linux.yml .github/workflows/mac.yml .github/workflows/mac_packaged.yml .github/workflows/snap.yml .github/workflows/win.yml
 ```
 
-- [ ] **Step 3: Resolve conflict in `Telegram/SourceFiles/boxes/send_files_box.cpp`**
+- [x] **Step 3: Resolve conflict in `Telegram/SourceFiles/boxes/send_files_box.cpp`**
 Integrate `SendMenu::FillSendMenu` return check with AyuGram "Send As Sticker" action and drag-and-drop reordering:
 ```cpp
 		const auto result = SendMenu::FillSendMenu(
@@ -117,18 +117,18 @@ Integrate `SendMenu::FillSendMenu` return check with AyuGram "Send As Sticker" a
 		return true;
 ```
 
-- [ ] **Step 4: Update `version.h` to version 7.1.2 (7001002)**
+- [x] **Step 4: Update `version.h` to version 7.1.2 (7001002)**
 In `Telegram/SourceFiles/core/version.h`:
 ```cpp
 constexpr auto AppVersion = 7001002;
 constexpr auto AppVersionStr = "7.1.2";
 ```
 
-- [ ] **Step 5: Update `Telegram.rc` and `Updater.rc` to 7.1.2.0**
+- [x] **Step 5: Update `Telegram.rc` and `Updater.rc` to 7.1.2.0**
 In `Telegram/Resources/winrc/Telegram.rc` and `Telegram/Resources/winrc/Updater.rc`:
 Ensure `FileVersion` and `ProductVersion` are `"7.1.2.0"` while keeping `"Radolyn Labs"` and `"AyuGram Desktop"`.
 
-- [ ] **Step 6: Update `Telegram/build/version`**
+- [x] **Step 6: Update `Telegram/build/version`**
 Ensure:
 ```
 AppVersion         7001002
@@ -140,12 +140,12 @@ AlphaVersion       0
 AppVersionOriginal 7.1.2
 ```
 
-- [ ] **Step 7: Stage and record `Telegram/lib_ui` submodule**
+- [x] **Step 7: Stage and record `Telegram/lib_ui` submodule**
 ```bash
 git -C c:/Users/aver/Desktop/ayu/AyuGramDesktop-dev add Telegram/lib_ui
 ```
 
-- [ ] **Step 8: Stage all resolved files and complete merge commit**
+- [x] **Step 8: Stage all resolved files and complete merge commit**
 ```bash
 git -C c:/Users/aver/Desktop/ayu/AyuGramDesktop-dev add -A
 git -C c:/Users/aver/Desktop/ayu/AyuGramDesktop-dev commit -m "Merge tag 'v7.1.2' into dev"
@@ -162,13 +162,13 @@ git -C c:/Users/aver/Desktop/ayu/AyuGramDesktop-dev commit -m "Merge tag 'v7.1.2
 - Consumes: merged `dev` branch.
 - Produces: completely validated repository ready for immediate build.
 
-- [ ] **Step 1: Run `git submodule update --init --recursive`**
+- [x] **Step 1: Run `git submodule update --init --recursive`**
 ```bash
 git -C c:/Users/aver/Desktop/ayu/AyuGramDesktop-dev submodule update --init --recursive
 ```
 
-- [ ] **Step 2: Verify `git status` and `git submodule status`**
+- [x] **Step 2: Verify `git status` and `git submodule status`**
 Check that working tree is clean and submodules match expected commits.
 
-- [ ] **Step 3: Verify diff against `v7.1.2` for integrity of AyuGram patches**
+- [x] **Step 3: Verify diff against `v7.1.2` for integrity of AyuGram patches**
 Verify that all AyuGram features (Ghost Mode, TTL anti-burn, settings, streamer mode, gift catalog, sticker sender, window settings) are intact.
