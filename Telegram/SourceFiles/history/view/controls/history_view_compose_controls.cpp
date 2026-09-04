@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/controls/history_view_compose_controls.h"
 
+#include "ayu/ui/ayu_liquid_glass.h"
 #include "base/call_delayed.h"
 #include "base/event_filter.h"
 #include "base/options.h"
@@ -418,7 +419,17 @@ void FieldHeader::init() {
 	) | rpl::on_next([=] {
 		Painter p(this);
 		p.setInactive(_show->paused(Window::GifPauseReason::Any));
-		p.fillRect(rect(), st::historyComposeAreaBg);
+		if (AyuLiquidGlass::isEnabled(LiquidGlassMode::ChatBars)) {
+			AyuLiquidGlass::paintGlass(
+				p,
+				rect(),
+				st::historyComposeAreaBg->c,
+				this,
+				true,
+				false);
+		} else {
+			p.fillRect(rect(), st::historyComposeAreaBg);
+		}
 
 		const auto position = st::historyReplyIconPosition;
 		if (_suggestOptions) {
@@ -5652,7 +5663,17 @@ void ComposeControls::paintBackground(QPainter &p, QRect full, QRect clip) {
 		}
 		p.drawRoundedRect(full, _st.radius, _st.radius);
 	} else {
-		p.fillRect(clip, _st.bg);
+		if (AyuLiquidGlass::isEnabled(LiquidGlassMode::ChatBars)) {
+			AyuLiquidGlass::paintGlass(
+				p,
+				clip,
+				_st.bg->c,
+				_wrap.get(),
+				true,
+				false);
+		} else {
+			p.fillRect(clip, _st.bg);
+		}
 	}
 }
 
