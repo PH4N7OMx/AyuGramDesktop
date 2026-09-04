@@ -24,18 +24,48 @@
 #include "rpl/combine.h"
 #include "tray.h"
 #include "window/window_controller.h"
+#include "base/platform/base_platform_file_utilities.h"
 
 #include <algorithm>
 #include <fstream>
 #include <limits>
 #include <QApplication>
+#include <QtCore/QDir>
+#include <QtCore/QFile>
+#include <QtCore/QFileInfo>
 
 using json = nlohmann::json;
 
 namespace {
 
-std::string getSettingsPath() {
-	return (cWorkingDir() + u"tdata/ayu_settings.json"_q).toStdString();
+QString settingsPath() {
+	return cWorkingDir() + u"tdata/ayu_settings.json"_q;
+}
+
+QString settingsBackupPath() {
+	return cWorkingDir() + u"tdata/ayu_settings.json.bak"_q;
+}
+
+QString settingsTempPath() {
+	return cWorkingDir() + u"tdata/ayu_settings.json.tmp"_q;
+}
+
+bool readJsonFromFile(const QString &path, json &out) {
+	QFile file(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return false;
+	}
+	const auto data = file.readAll();
+	file.close();
+	if (data.isEmpty()) {
+		return false;
+	}
+	try {
+		out = json::parse(data.constData(), data.constData() + data.size());
+		return true;
+	} catch (...) {
+		return false;
+	}
 }
 
 void repaintApp() {
@@ -373,43 +403,53 @@ AyuSettings &AyuSettings::getInstance() {
 }
 
 void AyuSettings::load() {
-	std::ifstream file(getSettingsPath());
-	if (!file.good()) {
+	json p;
+	auto loaded = readJsonFromFile(settingsPath(), p);
+	if (!loaded && QFile::exists(settingsBackupPath())) {
+		loaded = readJsonFromFile(settingsBackupPath(), p);
+	}
+	if (!loaded) {
+		if (cGhost()) {
+			auto &ghost = AyuSettings::ghost();
+			ghost._sendReadMessages = false;
+			ghost._sendReadStories = false;
+			ghost._sendOnlinePackets = false;
+			ghost._sendUploadProgress = false;
+			ghost._sendOfflinePacketAfterOnline = true;
+		}
+
+		getInstance().validate();
+
+		if (getInstance().streamerMode()) {
+			AyuFeatures::StreamerMode::apply(true);
+		}
 		return;
 	}
 
 	auto &settings = getInstance();
 
+	if (!p.contains("ghostModeSettings")) {
+		p["ghostModeSettings"] = nlohmann::json::object({
+			{"0", {
+				{"sendReadMessages", p.value("sendReadMessages", true)},
+				{"sendReadStories", p.value("sendReadStories", true)},
+				{"sendOnlinePackets", p.value("sendOnlinePackets", true)},
+				{"sendUploadProgress", p.value("sendUploadProgress", true)},
+				{"sendOfflinePacketAfterOnline", p.value("sendOfflinePacketAfterOnline", false)},
+				{"markReadAfterAction", p.value("markReadAfterAction", true)},
+				{"useScheduledMessages", p.value("useScheduledMessages", false)},
+				{"sendWithoutSound", p.value("sendWithoutSound", false)}
+			}}
+		});
+		p["useGlobalGhostMode"] = true;
+
+		LOG(("AyuGramSettings: migrated ghost mode settings to per-account format"));
+	}
+
 	try {
-		json p;
-		file >> p;
-		file.close();
-
-		if (!p.contains("ghostModeSettings")) {
-			p["ghostModeSettings"] = nlohmann::json::object({
-				{"0", {
-					{"sendReadMessages", p.value("sendReadMessages", true)},
-					{"sendReadStories", p.value("sendReadStories", true)},
-					{"sendOnlinePackets", p.value("sendOnlinePackets", true)},
-					{"sendUploadProgress", p.value("sendUploadProgress", true)},
-					{"sendOfflinePacketAfterOnline", p.value("sendOfflinePacketAfterOnline", false)},
-					{"markReadAfterAction", p.value("markReadAfterAction", true)},
-					{"useScheduledMessages", p.value("useScheduledMessages", false)},
-					{"sendWithoutSound", p.value("sendWithoutSound", false)}
-				}}
-			});
-			p["useGlobalGhostMode"] = true;
-
-			LOG(("AyuGramSettings: migrated ghost mode settings to per-account format"));
-		}
-
-		try {
-			from_json(p, settings);
-		} catch (...) {
-			LOG(("AyuGramSettings: failed to parse settings file"));
-		}
+		from_json(p, settings);
 	} catch (...) {
-		LOG(("AyuGramSettings: failed to read settings file (not json-like)"));
+		LOG(("AyuGramSettings: failed to parse settings file"));
 	}
 
 	if (cGhost()) {
@@ -431,11 +471,37 @@ void AyuSettings::load() {
 void AyuSettings::save() {
 	auto &settings = getInstance();
 	json p = settings;
+	const auto dumped = p.dump(4);
+	const auto bytes = QByteArray::fromRawData(dumped.data(), dumped.size());
 
-	std::ofstream file;
-	file.open(getSettingsPath());
-	file << p.dump(4);
+	const auto target = settingsPath();
+	const auto backup = settingsBackupPath();
+	const auto temp = settingsTempPath();
+
+	QDir().mkpath(QFileInfo(target).absolutePath());
+
+	QFile file(temp);
+	if (!file.open(QIODevice::WriteOnly)) {
+		return;
+	}
+
+	if (file.write(bytes) != bytes.size()) {
+		file.close();
+		QFile::remove(temp);
+		return;
+	}
+
+	base::Platform::FlushFileData(file);
 	file.close();
+
+	if (QFile::exists(target)) {
+		QFile::remove(backup);
+		QFile::copy(target, backup);
+	}
+
+	if (!base::Platform::RenameWithOverwrite(temp, target)) {
+		QFile::remove(temp);
+	}
 }
 
 void AyuSettings::reset() {
@@ -1187,6 +1253,13 @@ void AyuSettings::setStreamerMode(bool val) {
 	save();
 }
 
+void AyuSettings::setLiquidGlassMode(LiquidGlassMode val) {
+	if (_liquidGlassMode.current() == val) return;
+	_liquidGlassMode = val;
+	save();
+	repaintApp();
+}
+
 void to_json(nlohmann::json &j, const AyuSettings &s) {
 	auto ghostAccounts = nlohmann::json::object();
 	for (const auto &[key, value] : s._ghostAccounts) {
@@ -1298,6 +1371,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"avatarCorners", s._avatarCorners.current()},
 		{"singleCornerRadius", s._singleCornerRadius.current()},
 		{"streamerMode", s._streamerMode.current()},
+		{"liquidGlassMode", s._liquidGlassMode.current()},
 		{"messageShotSettings", s._messageShotSettings}
 	};
 }
@@ -1427,6 +1501,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._avatarCorners = j.value("avatarCorners", defaults._avatarCorners.current());
 	s._singleCornerRadius = j.value("singleCornerRadius", defaults._singleCornerRadius.current());
 	s._streamerMode = j.value("streamerMode", defaults._streamerMode.current());
+	s._liquidGlassMode = j.value("liquidGlassMode", defaults._liquidGlassMode.current());
 
 	if (j.contains("messageShotSettings") && j["messageShotSettings"].is_object()) {
 		j["messageShotSettings"].get_to(s._messageShotSettings);
