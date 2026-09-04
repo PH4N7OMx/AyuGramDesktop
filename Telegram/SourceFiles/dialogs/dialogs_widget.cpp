@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/dialogs_widget.h"
 
+#include "ayu/ui/ayu_liquid_glass.h"
 #include "base/call_delayed.h"
 #include "base/qt/qt_key_modifiers.h"
 #include "base/options.h"
@@ -4903,7 +4904,17 @@ void Widget::paintEvent(QPaintEvent *e) {
 		_childListShown.current());
 	auto above = QRect(0, 0, width(), _scroll->y());
 	if (above.intersects(r)) {
-		p.fillRect(above.intersected(r), bg);
+		if (AyuLiquidGlass::isEnabled(LiquidGlassMode::Full)) {
+			AyuLiquidGlass::paintGlass(
+				p,
+				above.intersected(r),
+				st::dialogsBg->c,
+				this,
+				false,
+				true);
+		} else {
+			p.fillRect(above.intersected(r), bg);
+		}
 	}
 
 	auto belowTop = _scroll->y() + _scroll->height();
