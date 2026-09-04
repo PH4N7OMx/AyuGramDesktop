@@ -10,12 +10,19 @@
 
 namespace AyuLiquidGlass {
 
-bool isEnabled() {
-	return AyuSettings::getInstance().liquidGlassMode() != LiquidGlassMode::Disabled;
+bool isEnabled(LiquidGlassMode mode) {
+	const auto current = AyuSettings::getInstance().liquidGlassMode();
+	if (current == LiquidGlassMode::Disabled) {
+		return false;
+	}
+	if (mode == LiquidGlassMode::Full) {
+		return current == LiquidGlassMode::Full;
+	}
+	return true;
 }
 
 bool isFull() {
-	return AyuSettings::getInstance().liquidGlassMode() == LiquidGlassMode::Full;
+	return isEnabled(LiquidGlassMode::Full);
 }
 
 void paintGlass(

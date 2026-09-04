@@ -1,13 +1,13 @@
 #pragma once
 
+#include "ayu/ayu_settings.h"
+
 #include <QtGui/QPainter>
 #include <QtWidgets/QWidget>
 
-enum class LiquidGlassMode;
-
 namespace AyuLiquidGlass {
 
-[[nodiscard]] bool isEnabled();
+[[nodiscard]] bool isEnabled(LiquidGlassMode mode = LiquidGlassMode::ChatBars);
 [[nodiscard]] bool isFull();
 
 void paintGlass(
