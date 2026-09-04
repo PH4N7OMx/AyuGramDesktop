@@ -51,23 +51,11 @@ enum class SendWithoutSoundOption {
 	Always = 2,
 };
 
-enum class LiquidGlassMode {
-	Disabled = 0,
-	ChatBars = 1,
-	Full = 2,
-};
-
 struct MentionsSettings {
 	uint64 soundId = 0;
 	int mutedUntil = 0;
 	bool soundNone = false;
 };
-
-NLOHMANN_JSON_SERIALIZE_ENUM(LiquidGlassMode, {
-	{LiquidGlassMode::Disabled, 0},
-	{LiquidGlassMode::ChatBars, 1},
-	{LiquidGlassMode::Full, 2},
-})
 
 NLOHMANN_JSON_SERIALIZE_ENUM(PeerIdDisplay, {
 	{PeerIdDisplay::Hidden, 0},
@@ -392,7 +380,6 @@ public:
 	[[nodiscard]] int avatarCorners() const { return _avatarCorners.current(); }
 	[[nodiscard]] bool singleCornerRadius() const { return _singleCornerRadius.current(); }
 	[[nodiscard]] bool streamerMode() const { return _streamerMode.current(); }
-	[[nodiscard]] LiquidGlassMode liquidGlassMode() const { return _liquidGlassMode.current(); }
 
 	void setSaveDeletedMessages(bool val);
 	void setSaveMessagesHistory(bool val);
@@ -480,7 +467,6 @@ public:
 	void setAvatarCorners(int val);
 	void setSingleCornerRadius(bool val);
 	void setStreamerMode(bool val);
-	void setLiquidGlassMode(LiquidGlassMode val);
 
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeValue() const { return _useGlobalGhostMode.value(); }
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeChanges() const { return _useGlobalGhostMode.changes(); }
@@ -658,8 +644,6 @@ public:
 	[[nodiscard]] rpl::producer<bool> singleCornerRadiusChanges() const { return _singleCornerRadius.changes(); }
 	[[nodiscard]] rpl::producer<bool> streamerModeValue() const { return _streamerMode.value(); }
 	[[nodiscard]] rpl::producer<bool> streamerModeChanges() const { return _streamerMode.changes(); }
-	[[nodiscard]] rpl::producer<LiquidGlassMode> liquidGlassModeValue() const { return _liquidGlassMode.value(); }
-	[[nodiscard]] rpl::producer<LiquidGlassMode> liquidGlassModeChanges() const { return _liquidGlassMode.changes(); }
 
 	friend void to_json(nlohmann::json &j, const AyuSettings &s);
 	friend void from_json(const nlohmann::json &j, AyuSettings &s);
@@ -763,7 +747,6 @@ private:
 	rpl::variable<int> _avatarCorners = 23;
 	rpl::variable<bool> _singleCornerRadius = false;
 	rpl::variable<bool> _streamerMode = false;
-	rpl::variable<LiquidGlassMode> _liquidGlassMode = LiquidGlassMode::Disabled;
 
 	rpl::variable<bool> _useGlobalGhostMode = true;
 	std::map<uint64, std::unique_ptr<GhostModeAccountSettings>> _ghostAccounts;

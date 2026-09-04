@@ -210,31 +210,6 @@ void BuildAppearance(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.setter = &AyuSettings::setHidePremiumStatuses,
 	});
 
-	ayu.addChooseButton({
-		.id = u"ayu/liquidGlassMode"_q,
-		.altIds = { u"ayu/liquidGlass"_q },
-		.title = rpl::single(QString("Liquid Glass (iOS)")),
-		.boxTitle = rpl::single(QString("Liquid Glass (iOS)")),
-		.initialSelection = static_cast<int>(settings->liquidGlassMode()),
-		.options = {
-			QString("Disabled"),
-			QString("Chat bars"),
-			QString("Full UI"),
-		},
-		.setter = [](int index) {
-			AyuSettings::getInstance().setLiquidGlassMode(
-				static_cast<LiquidGlassMode>(index));
-		},
-		.keywords = {
-			QString("liquid"),
-			QString("glass"),
-			QString("blur"),
-			QString("ios"),
-			QString("стекло"),
-			QString("блюр"),
-		},
-	});
-
 	const auto controller = builder.controller();
 	builder.addButton({
 		.id = u"ayu/monoFont"_q,

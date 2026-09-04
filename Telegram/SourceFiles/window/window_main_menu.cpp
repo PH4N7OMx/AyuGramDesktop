@@ -82,7 +82,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
-#include "ayu/ui/ayu_liquid_glass.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "boxes/abstract_box.h"
 #include "styles/style_ayu_icons.h"
@@ -1013,17 +1012,7 @@ void MainMenu::paintEvent(QPaintEvent *e) {
 	const auto clip = e->rect();
 	const auto cover = QRect(0, 0, width(), st::mainMenuCoverHeight);
 
-	if (AyuLiquidGlass::isEnabled(LiquidGlassMode::Full)) {
-		AyuLiquidGlass::paintGlass(
-			p,
-			clip,
-			st::mainMenuBg->c,
-			this,
-			false,
-			false);
-	} else {
-		p.fillRect(clip, st::mainMenuBg);
-	}
+	p.fillRect(clip, st::mainMenuBg);
 	if (cover.intersects(clip)) {
 		drawName(p);
 	}

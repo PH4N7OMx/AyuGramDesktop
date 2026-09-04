@@ -132,8 +132,6 @@ set(ayugram_files
         ayu/ui/toasts.h
         ayu/ui/ayu_userpic.cpp
         ayu/ui/ayu_userpic.h
-        ayu/ui/ayu_liquid_glass.cpp
-        ayu/ui/ayu_liquid_glass.h
         ayu/ui/utils/ayu_profile_values.cpp
         ayu/ui/utils/ayu_profile_values.h
         ayu/ui/utils/color_cut_quantizer.cpp
