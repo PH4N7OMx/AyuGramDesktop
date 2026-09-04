@@ -2187,7 +2187,7 @@ auto ComposeControls::sendContentRequests(SendRequestType requestType) const {
 		_send->clicks() | rpl::filter([=] {
 			return sendButtonSends();
 		}) | filter | map,
-		_field->submits() | rpl::filter([=] {
+		_fieldSubmits.events() | rpl::filter([=] {
 			return submitSends();
 		}) | filter | submit,
 		_sendCustomRequests.events() | custom);
@@ -2202,15 +2202,8 @@ Api::SendOptions ComposeControls::adjustedSupportSendOptions(
 	return options;
 }
 
-rpl::producer<> ComposeControls::scrollToMaxRequests() const {
-	return _field->submits() | rpl::filter([=]{
-		if (_mode == Mode::Normal
-			&& !_voiceRecordBar->isListenState()
-			&& getTextWithAppliedMarkdown().text.isEmpty()) {
-			return true;
-		}
-		return false;
-	}) | rpl::to_empty;
+rpl::producer<Api::SendOptions> ComposeControls::scrollToMaxRequests() const {
+	return _scrollToMaxRequests.events();
 }
 
 rpl::producer<Api::SendOptions> ComposeControls::sendRequests() const {
@@ -2295,8 +2288,13 @@ void ComposeControls::offerRichPaste(not_null<const QMimeData*> data) {
 	if (!_history
 		|| !_pasteToastParent
 		|| !canShowRichEditor()
-		|| isEditingMessage()
-		|| !ChatHelpers::MimeDataLosesRichFormatting(session, data)) {
+		|| isEditingMessage()) {
+		return;
+	}
+	const auto decision = ChatHelpers::MimeDataRichPasteOffer(
+		session,
+		data);
+	if (!decision) {
 		return;
 	}
 	const auto copy = ChatHelpers::CloneMimeData(data);
@@ -2314,8 +2312,25 @@ void ComposeControls::offerRichPaste(not_null<const QMimeData*> data) {
 			.session = session,
 			.parent = parent,
 			.cancel = _field->changes(),
+			.offer = decision->offer,
 			.action = crl::guard(_wrap.get(), [=] {
-				if (_field->getTextWithTags() == now) {
+				const auto unchanged = (_field->getTextWithTags() == now);
+				if (decision->offer == ChatHelpers::RichPasteOffer::Field) {
+					if (!unchanged) {
+						return;
+					}
+					const auto &markdown = decision->markdown;
+					const auto from = std::min(position, anchor);
+					_field->setTextWithTags(ChatHelpers::TextWithTagsReplaced(
+						was,
+						from,
+						std::max(position, anchor),
+						markdown));
+					_field->setCursorPosition(
+						from + int(markdown.text.size()));
+					return;
+				}
+				if (unchanged) {
 					_field->setTextWithTags(was);
 					auto cursor = _field->textCursor();
 					cursor.setPosition(anchor);
@@ -3128,6 +3143,20 @@ void ComposeControls::initKeyHandler() {
 void ComposeControls::initField() {
 	_field->setMaxHeight(st::historyComposeFieldMaxHeight);
 	updateSubmitSettings();
+	_field->submits(
+	) | rpl::on_next([=](Qt::KeyboardModifiers modifiers) {
+		// Classify each submit once, before anyone handles it: a send
+		// clears the field, so checking emptiness later would see an
+		// empty field and send once more (marking as read).
+		if (_mode == Mode::Normal
+			&& !isEditingMessage()
+			&& !_voiceRecordBar->isListenState()
+			&& getTextWithAppliedMarkdown().text.isEmpty()) {
+			_scrollToMaxRequests.fire(adjustedSupportSendOptions(modifiers));
+		} else {
+			_fieldSubmits.fire_copy(modifiers);
+		}
+	}, _field->lifetime());
 	_field->cancelled(
 	) | rpl::on_next([=] {
 		escape();
@@ -3380,6 +3409,7 @@ void ComposeControls::fieldChanged() {
 	const auto commandShown = updateBotCommandShown();
 	const auto menuRefreshed = refreshBotMenuButton();
 	const auto likeShown = updateLikeShown();
+	_fieldCharsCountManager.setCount(Ui::ComputeFieldCharacterCount(_field));
 	// Must repeat the rule from updateControlsVisibility().
 	const auto hideExtra = hideExtraButtons()
 		|| isEditingMessage()
@@ -5412,7 +5442,8 @@ bool ComposeControls::hasSendableContent() const {
 }
 
 bool ComposeControls::hideExtraButtons() const {
-	return shouldShowRichDraftPreview();
+	return _fieldCharsCountManager.isLimitExceeded()
+		|| shouldShowRichDraftPreview();
 }
 
 bool ComposeControls::refreshBotMenuButton() {

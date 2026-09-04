@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unique_qptr.h"
 #include "base/timer.h"
 #include "chat_helpers/compose/compose_features.h"
+#include "chat_helpers/field_characters_count_manager.h"
 #include "dialogs/dialogs_key.h"
 #include "history/view/controls/compose_controls_common.h"
 #include "ui/round_rect.h"
@@ -244,7 +245,7 @@ public:
 	[[nodiscard]] rpl::producer<> showScheduledRequests() const;
 	[[nodiscard]] rpl::producer<> suggestPostToggleClicks() const;
 	[[nodiscard]] rpl::producer<> botKeyboardToggleClicks() const;
-	[[nodiscard]] rpl::producer<> scrollToMaxRequests() const;
+	[[nodiscard]] rpl::producer<Api::SendOptions> scrollToMaxRequests() const;
 
 	using MimeDataHook = Fn<bool(
 		not_null<const QMimeData*> data,
@@ -587,6 +588,7 @@ private:
 	std::unique_ptr<Ui::SilentToggle> _silent;
 	std::unique_ptr<Controls::TTLButton> _ttlInfo;
 	base::unique_qptr<Controls::CharactersLimitLabel> _charsLimitation;
+	FieldCharsCountManager _fieldCharsCountManager;
 	base::unique_qptr<Ui::IconButton> _scheduled;
 	base::unique_qptr<Ui::IconButton> _giftToUser;
 	base::unique_qptr<Ui::IconButton> _toggleSuggestPost;
@@ -615,6 +617,8 @@ private:
 	const Fn<void(not_null<DocumentData*>)> _unavailableEmojiPasted;
 
 	rpl::event_stream<Api::SendOptions> _sendCustomRequests;
+	rpl::event_stream<Qt::KeyboardModifiers> _fieldSubmits;
+	rpl::event_stream<Api::SendOptions> _scrollToMaxRequests;
 	rpl::event_stream<> _cancelRequests;
 	rpl::event_stream<> _replyCancelledExternally;
 	rpl::event_stream<FileChosen> _fileChosen;

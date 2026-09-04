@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/platform/base_platform_info.h"
 #include "core/application.h"
 #include "core/file_utilities.h"
+#include "core/update_channel.h"
 #include "core/update_checker.h"
 #include "core/version.h"
 #include "lang/lang_keys.h"
@@ -102,9 +103,30 @@ void AboutBox(not_null<Ui::GenericBox*> box, Window::SessionController* controll
 	box->setWidth(st::aboutWidth);
 }
 
-QString currentVersionText() {
+QString telegramFaqLink() {
+	const auto result = u"https://telegram.org/faq"_q;
+	const auto langpacked = [&](const char *language) {
+		return result + '/' + language;
+	};
+	const auto current = Lang::Id();
+	for (const auto language : { "de", "es", "it", "ko" }) {
+		if (current.startsWith(QLatin1String(language))) {
+			return langpacked(language);
+		}
+	}
+	if (current.startsWith(u"pt-br"_q)) {
+		return langpacked("br");
+	}
+	return result;
+}
+
+namespace {
+
+[[nodiscard]] QString CurrentVersionText(bool withCommit) {
 	auto result = QString::fromLatin1(AppVersionStr);
-	if (cAlphaVersion()) {
+	if (Core::BuildIsCanary) {
+		result += Core::CanaryVersionSuffix();
+	} else if (cAlphaVersion()) {
 		result += u" alpha %1"_q.arg(cAlphaVersion() % 1000);
 	} else if (AppBetaVersion) {
 		result += " beta";
@@ -117,7 +139,22 @@ QString currentVersionText() {
 #ifdef _DEBUG
 	result += " DEBUG";
 #endif
+	if (withCommit
+		&& Core::BuildIsCanary
+		&& Core::CanaryCommitHash[0] != '\0') {
+		result += u" \u00B7 "_q + QLatin1String(Core::CanaryCommitHash);
+	}
 	return result;
+}
+
+} // namespace
+
+QString currentVersionText() {
+	return CurrentVersionText(true);
+}
+
+QString currentVersionShortText() {
+	return CurrentVersionText(false);
 }
 
 void ArchiveHintBox(
