@@ -12,7 +12,6 @@
 
 ## ✨ Features
 
-- 👤 **View Avatars of Blocked Users:** Automatically resolves and displays avatars of users who blocked you via public web preview (if they have a public `@username`).
 - 👻 **Flexible Ghost Mode:** Granular control over read receipts, typing status, online packets, and scheduled messages.
 - 💾 **Message History & Anti-Recall:** Save deleted messages and message edit histories locally.
 - 💎 **Local Telegram Premium:** Unlock local client-side premium features and perks.
