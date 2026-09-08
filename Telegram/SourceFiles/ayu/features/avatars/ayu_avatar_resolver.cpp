@@ -8,14 +8,18 @@
 
 #include "ayu/ayu_settings.h"
 #include "base/random.h"
+#include "base/unixtime.h"
 #include "core/core_settings.h"
 #include "data/data_changes.h"
 #include "data/data_peer_id.h"
+#include "data/data_photo.h"
+#include "data/data_photo_media.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "main/main_session.h"
 #include "settings.h"
 #include "ui/image/image_location.h"
+#include "ui/image/image_location_factory.h"
 
 #include <QtCore/QBuffer>
 #include <QtCore/QDir>
@@ -102,7 +106,10 @@ void AyuAvatarResolver::resolve(not_null<UserData*> user) {
 		return;
 	}
 	if (user->hasUserpic()) {
-		return;
+		const auto id = user->userpicPhotoId();
+		if (id && user->owner().photo(id)->date()) {
+			return;
+		}
 	}
 	const auto username = user->username();
 	if (username.isEmpty()) {
@@ -255,7 +262,8 @@ void AyuAvatarResolver::fetchImage(ResolveTask task, const QString &avatarUrl) {
 
 		if (const auto session = task.session.get()) {
 			const auto user = session->data().user(task.userId);
-			if (!user->hasUserpic()) {
+			const auto id = user->userpicPhotoId();
+			if (!user->hasUserpic() || !id || !user->owner().photo(id)->date()) {
 				applyUserpic(user, image, jpegBytes);
 			}
 		}
@@ -279,12 +287,24 @@ void AyuAvatarResolver::applyUserpic(
 		buffer.open(QIODevice::WriteOnly);
 		image.save(&buffer, "JPG", 87);
 	}
-	user->setUserpic(
-		base::RandomValue<PhotoId>(),
-		ImageLocation(
-			{ .data = InMemoryLocation{ .bytes = bytes } },
-			image.width(),
-			image.height()),
-		false);
+	const auto photoId = base::RandomValue<PhotoId>();
+	const auto imgWithLoc = Images::FromImageInMemory(image, "JPG", bytes);
+
+	const auto photo = user->owner().photo(photoId);
+	photo->peer = user;
+	photo->setFields(base::unixtime::now(), false);
+
+	const auto media = photo->createMediaView();
+	photo->updateImages(
+		QByteArray(),
+		imgWithLoc,
+		imgWithLoc,
+		imgWithLoc,
+		ImageWithLocation(),
+		ImageWithLocation(),
+		0);
+	user->owner().keepAlive(media);
+
+	user->setUserpic(photoId, imgWithLoc.location, false);
 	user->session().changes().peerUpdated(user, UpdateFlag::Photo);
 }

@@ -216,7 +216,7 @@ Widget::Widget(
 
 	if (const auto peer = controller->peer()) {
 		if (const auto user = peer->asUser()) {
-			if (!user->hasUserpic() && !user->username().isEmpty()) {
+			if (!user->username().isEmpty()) {
 				Ayu::AyuAvatarResolver::Instance().resolve(user);
 			}
 		}
