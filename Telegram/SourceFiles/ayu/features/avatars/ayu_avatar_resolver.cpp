@@ -122,10 +122,14 @@ void AyuAvatarResolver::resolve(not_null<UserData*> user) {
 	const auto diskFilePath = diskDir + usernameLower + u".jpg"_q;
 	const auto fileInfo = QFileInfo(diskFilePath);
 	if (fileInfo.exists() && fileInfo.size() > 0) {
-		const auto image = QImage(diskFilePath);
-		if (!image.isNull()) {
-			applyUserpic(user, image);
-			return;
+		auto file = QFile(diskFilePath);
+		if (file.open(QIODevice::ReadOnly)) {
+			const auto bytes = file.readAll();
+			const auto image = QImage::fromData(bytes);
+			if (!image.isNull()) {
+				applyUserpic(user, image, bytes);
+				return;
+			}
 		}
 		QFile::remove(diskFilePath);
 	}
