@@ -257,6 +257,8 @@ set(ayugram_files
         ayu/data/ayu_database.h
         ayu/features/deleted_gifts/deleted_gifts.cpp
         ayu/features/deleted_gifts/deleted_gifts.h
+        ayu/features/avatars/ayu_avatar_resolver.cpp
+        ayu/features/avatars/ayu_avatar_resolver.h
 
         info/profile/info_profile_music_button.cpp
         info/profile/info_profile_music_button.h
