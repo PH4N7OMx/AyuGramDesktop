@@ -9222,3 +9222,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_MentionsMuteBoxTitle" = "Turn off mentions for...";
 "ayu_LoadBlockedAvatars" = "Load Avatars via t.me";
 "ayu_LoadBlockedAvatarsDescription" = "Allows you to see profile pictures of users who blocked you, if they have a public username.";
+"ayu_ChannelPromoTitle" = "AyuGram Fork";
+"ayu_ChannelPromoText" = "Subscribe to our official Telegram channel for updates and announcements!";
+"ayu_ChannelPromoSubscribe" = "Subscribe";
+"ayu_ChannelPromoLater" = "Later";
