@@ -24,6 +24,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/info_controller.h"
 #include "base/event_filter.h"
 
+// AyuGram includes
+#include "ayu/features/avatars/ayu_avatar_resolver.h"
+
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QScrollBar>
 
@@ -210,6 +213,14 @@ Widget::Widget(
 	}
 
 	setupTabsStripFloat();
+
+	if (const auto peer = controller->peer()) {
+		if (const auto user = peer->asUser()) {
+			if (!user->hasUserpic() && !user->username().isEmpty()) {
+				Ayu::AyuAvatarResolver::Instance().resolve(user);
+			}
+		}
+	}
 }
 
 void Widget::setupTabsStripFloat() {

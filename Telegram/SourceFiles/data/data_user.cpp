@@ -41,6 +41,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/features/avatars/ayu_avatar_resolver.h"
 #include "ayu/utils/telegram_helpers.h"
 
 namespace {
@@ -188,6 +189,9 @@ void UserData::setPhoto(const MTPUserProfilePhoto &photo) {
 	}, [&](const MTPDuserProfilePhotoEmpty &) {
 		removeFlags(UserDataFlag::PersonalPhoto);
 		clearUserpic();
+		if (!username().isEmpty()) {
+			Ayu::AyuAvatarResolver::Instance().resolve(this);
+		}
 	});
 }
 
@@ -410,6 +414,9 @@ void UserData::setUsernames(const Data::Usernames &newUsernames) {
 		| (!ranges::equal(wasUsernames, nowUsernames)
 			? UpdateFlag::Usernames
 			: UpdateFlag()));
+	if (!hasUserpic() && !nowUsername.isEmpty()) {
+		Ayu::AyuAvatarResolver::Instance().resolve(this);
+	}
 }
 
 void UserData::setUsername(const QString &username) {
