@@ -206,6 +206,14 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.setter = &AyuSettings::setDisableNotificationsDelay,
 	});
 
+	ayu.addSettingToggle({
+		.id = u"ayu/loadBlockedAvatars"_q,
+		.title = tr::ayu_LoadBlockedAvatars(),
+		.getter = &AyuSettings::loadBlockedAvatars,
+		.setter = &AyuSettings::setLoadBlockedAvatars,
+	});
+	builder.addDividerText(tr::ayu_LoadBlockedAvatarsDescription());
+
 	ayu.addSectionDivider();
 
 	const auto zalgoButton = builder.addButton({
