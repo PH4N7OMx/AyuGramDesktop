@@ -381,6 +381,7 @@ public:
 	[[nodiscard]] bool singleCornerRadius() const { return _singleCornerRadius.current(); }
 	[[nodiscard]] bool streamerMode() const { return _streamerMode.current(); }
 	[[nodiscard]] bool loadBlockedAvatars() const { return _loadBlockedAvatars.current(); }
+	[[nodiscard]] bool channelPromoShown() const { return _channelPromoShown.current(); }
 
 	void setSaveDeletedMessages(bool val);
 	void setSaveMessagesHistory(bool val);
@@ -469,6 +470,7 @@ public:
 	void setSingleCornerRadius(bool val);
 	void setStreamerMode(bool val);
 	void setLoadBlockedAvatars(bool val);
+	void setChannelPromoShown(bool val);
 
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeValue() const { return _useGlobalGhostMode.value(); }
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeChanges() const { return _useGlobalGhostMode.changes(); }
@@ -648,6 +650,8 @@ public:
 	[[nodiscard]] rpl::producer<bool> streamerModeChanges() const { return _streamerMode.changes(); }
 	[[nodiscard]] rpl::producer<bool> loadBlockedAvatarsValue() const { return _loadBlockedAvatars.value(); }
 	[[nodiscard]] rpl::producer<bool> loadBlockedAvatarsChanges() const { return _loadBlockedAvatars.changes(); }
+	[[nodiscard]] rpl::producer<bool> channelPromoShownValue() const { return _channelPromoShown.value(); }
+	[[nodiscard]] rpl::producer<bool> channelPromoShownChanges() const { return _channelPromoShown.changes(); }
 
 	friend void to_json(nlohmann::json &j, const AyuSettings &s);
 	friend void from_json(const nlohmann::json &j, AyuSettings &s);
@@ -752,6 +756,7 @@ private:
 	rpl::variable<bool> _singleCornerRadius = false;
 	rpl::variable<bool> _streamerMode = false;
 	rpl::variable<bool> _loadBlockedAvatars = true;
+	rpl::variable<bool> _channelPromoShown = false;
 
 	rpl::variable<bool> _useGlobalGhostMode = true;
 	std::map<uint64, std::unique_ptr<GhostModeAccountSettings>> _ghostAccounts;
