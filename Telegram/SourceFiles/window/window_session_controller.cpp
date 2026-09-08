@@ -129,6 +129,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_window.h"
 #include "styles/style_dialogs.h"
 #include "styles/style_layers.h" // st::boxLabel
+#include "ui/layers/generic_box.h"
+#include "ui/widgets/labels.h"
+#include "ui/basic_click_handlers.h"
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
@@ -1607,6 +1610,11 @@ SessionController::SessionController(
 			Theme::CheckChatThemeWallPaper(this);
 		});
 	}
+	if (_isPrimary) {
+		crl::on_main(base::make_weak(this), [=] {
+			checkChannelPromo();
+		});
+	}
 	style::PaletteChanged(
 	) | rpl::on_next([=] {
 		for (auto &[key, value] : _customChatThemes) {
@@ -1866,6 +1874,29 @@ void SessionController::suggestArchiveAndMute() {
 		box->addButton(tr::lng_cancel(), [=] {
 			box->closeBox();
 		});
+	}));
+}
+
+void SessionController::checkChannelPromo() {
+	if (AyuSettings::getInstance().channelPromoShown()) {
+		return;
+	}
+	AyuSettings::getInstance().setChannelPromoShown(true);
+
+	_window->show(Box([=](not_null<Ui::GenericBox*> box) {
+		box->setTitle(tr::ayu_ChannelPromoTitle());
+		box->addRow(object_ptr<Ui::FlatLabel>(
+			box,
+			tr::ayu_ChannelPromoText(),
+			st::boxLabel));
+		box->addButton(tr::ayu_ChannelPromoSubscribe(), [=] {
+			UrlClickHandler::Open(u"https://t.me/ayufork"_q);
+			box->closeBox();
+		});
+		box->addButton(tr::ayu_ChannelPromoLater(), [=] {
+			box->closeBox();
+		});
+		box->setCloseByOutsideClick(true);
 	}));
 }
 

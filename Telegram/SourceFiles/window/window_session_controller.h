@@ -767,6 +767,7 @@ private:
 	void checkOpenedFilter();
 	void suggestArchiveAndMute();
 	void activateFirstChatsFilter();
+	void checkChannelPromo();
 
 	int minimalThreeColumnWidth() const;
 	int countDialogsWidthFromRatio(int bodyWidth) const;
