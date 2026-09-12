@@ -10,6 +10,8 @@ jobs:
   build-linux:
     name: Build Linux
     runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: tdesktop:centos_env
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,12 +22,14 @@ jobs:
       - name: Patch codegen scanner for ayu_ prefix
         run: |
           python3 -c "
+          import re
           p = 'Telegram/codegen/codegen/lang/subsets.cpp'
           c = open(p).read()
-          old = 'if (data[i] != \'l\'\n\t\t\t|| data[i + 1] != \'n\'\n\t\t\t|| data[i + 2] != \'g\'\n\t\t\t|| data[i + 3] != \'_\''
-          new = 'const auto isLng = (data[i] == \'l\' && data[i + 1] == \'n\' && data[i + 2] == \'g\' && data[i + 3] == \'_\');\n\t\tconst auto isAyu = (data[i] == \'a\' && data[i + 1] == \'y\' && data[i + 2] == \'u\' && data[i + 3] == \'_\');\n\t\tif ((!isLng && !isAyu)'
-          if old in c:
-              open(p, 'w').write(c.replace(old, new))
+          pattern = r'if \(data\[i\] != \'l\'\s*\|\| data\[i \+ 1\] != \'n\'\s*\|\| data\[i \+ 2\] != \'g\'\s*\|\| data\[i \+ 3\] != \'_\''
+          replacement = 'const auto isLng = (data[i] == \'l\' && data[i + 1] == \'n\' && data[i + 2] == \'g\' && data[i + 3] == \'_\');\\n\\t\\tconst auto isAyu = (data[i] == \'a\' && data[i + 1] == \'y\' && data[i + 2] == \'u\' && data[i + 3] == \'_\');\\n\\t\\tif ((!isLng && !isAyu)'
+          c, n = re.subn(pattern, replacement, c)
+          print(f'Patched {n} occurrences in {p}')
+          open(p, 'w').write(c)
           "
 
       - name: Free up disk space
@@ -36,17 +40,53 @@ jobs:
       - name: Set up build environment
         run: |
           sudo apt update
-          curl -sSL https://install.python-poetry.org | python3 -
-          export PATH="$HOME/.local/bin:$PATH"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          sudo apt install -y python3-jinja2
           curl -sSL https://github.com/ccache/ccache/releases/download/v4.13.6/ccache-4.13.6-linux-x86_64-glibc.tar.xz \
           | sudo tar xJ -C /usr/local/bin --strip-components=1 ccache-4.13.6-linux-x86_64-glibc/ccache
           echo "CCACHE_DIR=$RUNNER_TEMP/.tdesktop-cache" >> $GITHUB_ENV
-          mkdir -p "$RUNNER_TEMP/.tdesktop-cache"
           cd Telegram/build/docker/centos_env
-          poetry install
-          DOCKERFILE=$(DEBUG= LTO= poetry run gen_dockerfile)
+          DOCKERFILE=$(DEBUG= LTO= python3 gen_dockerfile.py)
           echo "$DOCKERFILE" > Dockerfile
+          rm -rf __pycache__
+
+      - name: Set up Docker Buildx
+        id: setup-buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Libraries cache
+        id: cache-libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/.buildx-cache
+            ${{ runner.temp }}/.mount-cache
+          key: ${{ runner.os }}-libs-${{ hashFiles('Telegram/build/docker/centos_env/**') }}
+          restore-keys: |
+            ${{ runner.os }}-libs-
+
+      - name: Restore Docker cache mounts
+        uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723
+        with:
+          builder: ${{ steps.setup-buildx.outputs.name }}
+          cache-dir: ${{ runner.temp }}/.mount-cache
+          dockerfile: Telegram/build/docker/centos_env/Dockerfile
+          skip-extraction: ${{ steps.cache-libs.outputs.cache-hit }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: Telegram/build/docker/centos_env
+          load: true
+          tags: ${{ env.IMAGE_TAG }}
+          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
+          cache-to: type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max
+
+      - name: Move cache
+        run: |
+          if [ -d "${{ runner.temp }}/.buildx-cache-new" ]; then
+            rm -rf ${{ runner.temp }}/.buildx-cache
+            mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
+          fi
 
       - name: ccache cache
         uses: actions/cache@v4
@@ -55,16 +95,6 @@ jobs:
           key: ${{ runner.os }}-linux-ccache-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-linux-ccache-
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: Telegram/build/docker/centos_env
-          load: true
-          tags: tdesktop:centos_env
 
       - name: Build Telegram Desktop
         run: |
@@ -75,7 +105,7 @@ jobs:
           -v $PWD:/usr/src/tdesktop \
           -v ${{ env.CCACHE_DIR }}:/var/cache/ccache \
           -e CONFIG=Release \
-          tdesktop:centos_env \
+          ${{ env.IMAGE_TAG }} \
           /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
           -D TDESKTOP_API_ID=2040 \
           -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
@@ -116,8 +146,11 @@ jobs:
     name: Build macOS
     runs-on: macos-14
     env:
-      ONLY_CACHE: "false"
-      PREPARE_PATH: "Telegram/build/prepare/prepare.py"
+      CMAKE_GENERATOR: "Ninja"
+      CMAKE_BUILD_TYPE: "Release"
+      CMAKE_PREFIX_PATH: "/opt/homebrew/opt/ffmpeg@6:/opt/homebrew/opt/openal-soft:/opt/homebrew/opt/qtbase:/opt/homebrew/opt/qtshadertools:/opt/homebrew/opt/qtsvg:/opt/homebrew/opt/qtimageformats"
+      TDE2E: "51743dfd01dff6179e2d8f7095729caa4e2222e9"
+      MANUAL_CACHING: "1"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -125,26 +158,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Free up disk space on macOS
-        run: |
-          sudo rm -rf /usr/local/share/android-sdk /usr/local/lib/node_modules || true
-          sudo rm -rf /Applications/Xcode_13*.app /Applications/Xcode_14*.app /Applications/Xcode_15.[0-3]*.app || true
-          brew cleanup -s || true
-          rm -rf ~/Library/Caches/Homebrew || true
-          df -h
-
-      - name: Patch codegen scanner for ayu_ prefix
-        run: |
-          python3 -c "
-          p = 'Telegram/codegen/codegen/lang/subsets.cpp'
-          c = open(p).read()
-          old = 'if (data[i] != \'l\'\n\t\t\t|| data[i + 1] != \'n\'\n\t\t\t|| data[i + 2] != \'g\'\n\t\t\t|| data[i + 3] != \'_\''
-          new = 'const auto isLng = (data[i] == \'l\' && data[i + 1] == \'n\' && data[i + 2] == \'g\' && data[i + 3] == \'_\');\n\t\tconst auto isAyu = (data[i] == \'a\' && data[i + 1] == \'y\' && data[i + 2] == \'u\' && data[i + 3] == \'_\');\n\t\tif ((!isLng && !isAyu)'
-          if old in c:
-              open(p, 'w').write(c.replace(old, new))
-          "
-
-      - name: Set up Xcode & ccache
+      - name: Set up Xcode
         run: |
           if [ -d "/Applications/Xcode_16.0.app" ]; then
             sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer
@@ -156,68 +170,153 @@ jobs:
             sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           fi
           xcodebuild -version
-          brew upgrade ca-certificates || true
-          brew link --overwrite ca-certificates || true
-          brew install --overwrite ninja nasm yasm pkg-config cmake autoconf automake libtool meson wget gperf ccache
-          echo "CCACHE_DIR=$RUNNER_TEMP/.tdesktop-cache" >> $GITHUB_ENV
 
-      - name: ccache cache
+      - name: Install dependencies via Homebrew
+        run: |
+          libs="ada-url ffmpeg@6 jpeg-xl libavif libheif openal-soft openh264 openssl opus qtbase qtimageformats qtshadertools qtsvg xz"
+          brew update
+          brew upgrade || true
+          brew install autoconf automake boost cmake libtool ninja pkg-config python $libs
+
+          sudo sed -i '' '/CMAKE_${lang}_FLAGS_DEBUG_INIT/s/ -g//' /opt/homebrew/share/cmake/Modules/Compiler/GNU.cmake || true
+
+          xcodebuild -version > CACHE_KEY.txt
+          brew list --versions $libs >> CACHE_KEY.txt
+          echo "$MANUAL_CACHING" >> CACHE_KEY.txt
+          echo "$GITHUB_WORKSPACE" >> CACHE_KEY.txt
+          echo "CACHE_KEY=$(md5 -q CACHE_KEY.txt)" >> $GITHUB_ENV
+
+          echo "LibrariesPath=$RUNNER_TEMP/Libraries" >> $GITHUB_ENV
+          mkdir -p "$RUNNER_TEMP/Libraries/local"
+
+          RNNOISE_SHA=$(git ls-remote https://github.com/xiph/rnnoise.git HEAD | awk '{print $1}')
+          echo "RNNOISE=$RNNOISE_SHA" >> $GITHUB_ENV
+
+          WEBRTC_SHA=$(git ls-remote https://github.com/desktop-app/tg_owt.git HEAD | awk '{print $1}')
+          echo "WEBRTC=$WEBRTC_SHA" >> $GITHUB_ENV
+
+          echo "/opt/homebrew/opt/qtbase/bin:/opt/homebrew/opt/qtshadertools/bin" >> $GITHUB_PATH
+
+      - name: RNNoise cache
+        id: cache-rnnoise
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/.tdesktop-cache
-          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          path: ${{ env.LibrariesPath }}/local/rnnoise
+          key: ${{ runner.os }}-rnnoise-${{ env.RNNOISE }}-${{ env.CACHE_KEY }}
           restore-keys: |
-            ${{ runner.os }}-ccache-
+            ${{ runner.os }}-rnnoise-
 
-      - name: Libraries cache
-        id: cache-libs
+      - name: Build RNNoise
+        if: steps.cache-rnnoise.outputs.cache-hit != 'true'
+        run: |
+          cd "$LibrariesPath"
+          git clone --depth=1 https://github.com/xiph/rnnoise.git
+          cd rnnoise
+          ./autogen.sh
+          ./configure --prefix="$LibrariesPath/local/rnnoise" --disable-examples --disable-doc
+          make -j$(sysctl -n hw.logicalcpu)
+          make install
+
+      - name: WebRTC cache
+        id: cache-webrtc
         uses: actions/cache@v4
         with:
-          path: |
-            Libraries
-            ${{ github.workspace }}/../Libraries
-          key: ${{ runner.os }}-libs-${{ hashFiles('Telegram/build/prepare/prepare.py') }}
+          path: ${{ env.LibrariesPath }}/local/tg_owt
+          key: ${{ runner.os }}-webrtc-${{ env.WEBRTC }}-${{ env.CACHE_KEY }}
+          restore-keys: |
+            ${{ runner.os }}-webrtc-
 
-      - name: Prepare libraries
-        if: steps.cache-libs.outputs.cache-hit != 'true'
+      - name: Build WebRTC (tg_owt)
+        if: steps.cache-webrtc.outputs.cache-hit != 'true'
         run: |
-          cd ..
-          for i in {1..5}; do
-            echo "Attempt $i to prepare libraries..."
-            python3 $GITHUB_WORKSPACE/${{ env.PREPARE_PATH }} && break || (echo "Attempt $i failed, retrying in 15s..." && sleep 15)
-          done
+          cd "$LibrariesPath"
+          git clone --depth=1 --recursive --shallow-submodules https://github.com/desktop-app/tg_owt.git
+          cd tg_owt
+          cmake -Bbuild . \
+            -G Ninja \
+            -DCMAKE_INSTALL_PREFIX="$LibrariesPath/local/tg_owt" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64
+          cmake --build build -j$(sysctl -n hw.logicalcpu)
+          cmake --install build
 
-      - name: Configure
+      - name: TDE2E cache
+        id: cache-tde2e
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.LibrariesPath }}/local/tde2e
+          key: ${{ runner.os }}-tde2e-${{ env.TDE2E }}-${{ env.CACHE_KEY }}
+          restore-keys: |
+            ${{ runner.os }}-tde2e-
+
+      - name: Build TDE2E
+        if: steps.cache-tde2e.outputs.cache-hit != 'true'
         run: |
+          cd "$LibrariesPath"
+          git init tde2e
+          cd tde2e
+          git remote add origin https://github.com/tdlib/td.git
+          git fetch --depth=1 origin "$TDE2E"
+          git reset --hard FETCH_HEAD
+          cmake -Bbuild . \
+            -G Ninja \
+            -DCMAKE_INSTALL_PREFIX="$LibrariesPath/local/tde2e" \
+            -DTD_E2E_ONLY=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64
+          cmake --build build -j$(sysctl -n hw.logicalcpu)
+          cmake --install build
+
+      - name: Patch codegen scanner for ayu_ prefix
+        run: |
+          python3 -c "
+          import re
+          p = 'Telegram/codegen/codegen/lang/subsets.cpp'
+          c = open(p).read()
+          pattern = r'if \(data\[i\] != \'l\'\s*\|\| data\[i \+ 1\] != \'n\'\s*\|\| data\[i \+ 2\] != \'g\'\s*\|\| data\[i \+ 3\] != \'_\''
+          replacement = 'const auto isLng = (data[i] == \'l\' && data[i + 1] == \'n\' && data[i + 2] == \'g\' && data[i + 3] == \'_\');\\n\\t\\tconst auto isAyu = (data[i] == \'a\' && data[i + 1] == \'y\' && data[i + 2] == \'u\' && data[i + 3] == \'_\');\\n\\t\\tif ((!isLng && !isAyu)'
+          c, n = re.subn(pattern, replacement, c)
+          print(f'Patched {n} occurrences in {p}')
+          open(p, 'w').write(c)
+          "
+
+      - name: Configure and Build AyuGram
+        run: |
+          LOCAL_PREFIXES=$(find "$LibrariesPath/local" -mindepth 1 -maxdepth 1 -type d -exec printf ':%s' {} +)
+          export CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH$LOCAL_PREFIXES"
+          echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH"
+
           XCODE_VER=$(xcodebuild -version | awk 'NR==1{print $2}' | cut -d. -f1)
-          EXTRA_FLAGS="-GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_OSX_ARCHITECTURES=arm64"
+          EXTRA_FLAGS=""
           if [ "$XCODE_VER" -lt 16 ]; then
             echo "Xcode version is < 16 ($XCODE_VER), disabling Swift 6..."
             EXTRA_FLAGS="$EXTRA_FLAGS -DDESKTOP_APP_DISABLE_SWIFT6=ON"
           fi
-          python3 Telegram/configure.py \
+
+          cmake -Bbuild . \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DDESKTOP_APP_USE_PACKAGED=ON \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
             $EXTRA_FLAGS
 
-      - name: Build
-        run: |
-          cmake --build out --config Release -- -j 4
+          cmake --build build -j$(sysctl -n hw.logicalcpu)
 
       - name: Package macOS DMG
         run: |
-          APP_PATH=$(find out/ \( -name "AyuGram.app" -o -name "Telegram.app" \) -type d | head -n 1)
+          APP_PATH=$(find build -name "*.app" -maxdepth 2 -type d | head -n 1)
           if [ -n "$APP_PATH" ]; then
             APP_NAME=$(basename "$APP_PATH")
-            APP_DIR=$(dirname "$APP_PATH")
             echo "Found $APP_NAME at $APP_PATH"
-            cd "$APP_DIR"
-            hdiutil create -volname "AyuGram" -srcfolder "$APP_NAME" -ov -format UDZO macOS.dmg
-            mkdir -p "$GITHUB_WORKSPACE/out/Release"
-            cp macOS.dmg "$GITHUB_WORKSPACE/out/Release/macOS.dmg" || true
+            /opt/homebrew/opt/qtbase/bin/macdeployqt "$APP_PATH" || macdeployqt "$APP_PATH"
+            codesign --remove-signature "$APP_PATH" || true
+            mkdir -p out/Release
+            hdiutil create -volname "AyuGram" -srcfolder "$APP_PATH" -ov -format UDZO out/Release/macOS.dmg
           else
-            echo "Error: Neither AyuGram.app nor Telegram.app found under out/"
-            find out/ -maxdepth 3 || true
+            echo "Error: Application bundle (*.app) not found under build/"
+            find build -maxdepth 3 || true
             exit 1
           fi
 
@@ -233,4 +332,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
         with:
           files: out/Release/macOS.dmg
+
 
