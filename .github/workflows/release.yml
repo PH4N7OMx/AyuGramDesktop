@@ -148,7 +148,8 @@ jobs:
     env:
       CMAKE_GENERATOR: "Ninja"
       CMAKE_BUILD_TYPE: "Release"
-      CMAKE_PREFIX_PATH: "/opt/homebrew/opt/ffmpeg@6:/opt/homebrew/opt/openal-soft:/opt/homebrew/opt/qtbase:/opt/homebrew/opt/qtshadertools:/opt/homebrew/opt/qtsvg:/opt/homebrew/opt/qtimageformats"
+      CMAKE_PREFIX_PATH: "/opt/homebrew/opt/ffmpeg@6:/opt/homebrew/opt/openal-soft:/opt/homebrew/opt/openssl@3:/opt/homebrew/opt/qtbase:/opt/homebrew/opt/qtshadertools:/opt/homebrew/opt/qtsvg:/opt/homebrew/opt/qtimageformats"
+      PKG_CONFIG_PATH: "/opt/homebrew/opt/ffmpeg@6/lib/pkgconfig:/opt/homebrew/opt/openal-soft/lib/pkgconfig:/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/opt/opus/lib/pkgconfig:/opt/homebrew/lib/pkgconfig"
       TDE2E: "51743dfd01dff6179e2d8f7095729caa4e2222e9"
       MANUAL_CACHING: "1"
     steps:
@@ -196,6 +197,7 @@ jobs:
           WEBRTC_SHA=$(git ls-remote https://github.com/desktop-app/tg_owt.git HEAD | awk '{print $1}')
           echo "WEBRTC=$WEBRTC_SHA" >> $GITHUB_ENV
 
+          echo "PKG_CONFIG_PATH=/opt/homebrew/opt/ffmpeg@6/lib/pkgconfig:/opt/homebrew/opt/openal-soft/lib/pkgconfig:/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/opt/opus/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
           echo "/opt/homebrew/opt/qtbase/bin:/opt/homebrew/opt/qtshadertools/bin" >> $GITHUB_PATH
 
       - name: RNNoise cache
@@ -239,7 +241,9 @@ jobs:
             -G Ninja \
             -DCMAKE_INSTALL_PREFIX="$LibrariesPath/local/tg_owt" \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_ARCHITECTURES=arm64
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \
+            -DPKG_CONFIG_USE_CMAKE_PREFIX_PATH=ON
           cmake --build build -j$(sysctl -n hw.logicalcpu)
           cmake --install build
 
@@ -267,7 +271,8 @@ jobs:
             -DCMAKE_INSTALL_PREFIX="$LibrariesPath/local/tde2e" \
             -DTD_E2E_ONLY=ON \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_ARCHITECTURES=arm64
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH"
           cmake --build build -j$(sysctl -n hw.logicalcpu)
           cmake --install build
 
