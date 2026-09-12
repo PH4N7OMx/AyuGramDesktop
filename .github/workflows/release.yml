@@ -176,12 +176,13 @@ jobs:
           libs="ada-url ffmpeg@6 jpeg-xl libavif libheif openal-soft openh264 openssl opus qtbase qtimageformats qtshadertools qtsvg xz"
           brew update
           brew upgrade || true
-          brew install autoconf automake boost cmake libtool ninja pkg-config python $libs
+          brew install --overwrite autoconf automake boost cmake libtool ninja pkg-config python $libs || true
+          brew link --overwrite $libs || true
 
           sudo sed -i '' '/CMAKE_${lang}_FLAGS_DEBUG_INIT/s/ -g//' /opt/homebrew/share/cmake/Modules/Compiler/GNU.cmake || true
 
           xcodebuild -version > CACHE_KEY.txt
-          brew list --versions $libs >> CACHE_KEY.txt
+          brew list --versions $libs >> CACHE_KEY.txt || true
           echo "$MANUAL_CACHING" >> CACHE_KEY.txt
           echo "$GITHUB_WORKSPACE" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(md5 -q CACHE_KEY.txt)" >> $GITHUB_ENV
@@ -209,6 +210,7 @@ jobs:
       - name: Build RNNoise
         if: steps.cache-rnnoise.outputs.cache-hit != 'true'
         run: |
+          mkdir -p "$LibrariesPath/local"
           cd "$LibrariesPath"
           git clone --depth=1 https://github.com/xiph/rnnoise.git
           cd rnnoise
@@ -229,6 +231,7 @@ jobs:
       - name: Build WebRTC (tg_owt)
         if: steps.cache-webrtc.outputs.cache-hit != 'true'
         run: |
+          mkdir -p "$LibrariesPath/local"
           cd "$LibrariesPath"
           git clone --depth=1 --recursive --shallow-submodules https://github.com/desktop-app/tg_owt.git
           cd tg_owt
@@ -252,6 +255,7 @@ jobs:
       - name: Build TDE2E
         if: steps.cache-tde2e.outputs.cache-hit != 'true'
         run: |
+          mkdir -p "$LibrariesPath/local"
           cd "$LibrariesPath"
           git init tde2e
           cd tde2e
