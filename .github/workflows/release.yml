@@ -32,6 +32,17 @@ jobs:
           open(p, 'w').write(c)
           "
 
+      - name: Patch tgcalls CryptoHelper for Xcode 16 / Clang
+        run: |
+          python3 -c "
+          import re
+          p = 'Telegram/ThirdParty/tgcalls/tgcalls/CryptoHelper.h'
+          c = open(p).read()
+          c, n = re.subn(r'extern\s+\"C\"\s*\{\s*#include\s*<cstdint>', '#include <cstdint>\n\nextern \"C\" {', c)
+          print(f'Patched {n} occurrences in {p}')
+          open(p, 'w').write(c)
+          "
+
       - name: Free up disk space
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
         with:
@@ -328,6 +339,17 @@ jobs:
           pattern = r'if \(data\[i\] != \'l\'\s*\|\| data\[i \+ 1\] != \'n\'\s*\|\| data\[i \+ 2\] != \'g\'\s*\|\| data\[i \+ 3\] != \'_\''
           replacement = 'const auto isLng = (data[i] == \'l\' && data[i + 1] == \'n\' && data[i + 2] == \'g\' && data[i + 3] == \'_\');\\n\\t\\tconst auto isAyu = (data[i] == \'a\' && data[i + 1] == \'y\' && data[i + 2] == \'u\' && data[i + 3] == \'_\');\\n\\t\\tif ((!isLng && !isAyu)'
           c, n = re.subn(pattern, replacement, c)
+          print(f'Patched {n} occurrences in {p}')
+          open(p, 'w').write(c)
+          "
+
+      - name: Patch tgcalls CryptoHelper for Xcode 16 / Clang
+        run: |
+          python3 -c "
+          import re
+          p = 'Telegram/ThirdParty/tgcalls/tgcalls/CryptoHelper.h'
+          c = open(p).read()
+          c, n = re.subn(r'extern\s+\"C\"\s*\{\s*#include\s*<cstdint>', '#include <cstdint>\n\nextern \"C\" {', c)
           print(f'Patched {n} occurrences in {p}')
           open(p, 'w').write(c)
           "
