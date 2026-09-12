@@ -153,6 +153,7 @@ jobs:
       CMAKE_PREFIX_PATH: "/opt/homebrew:/opt/homebrew/opt/ffmpeg@6:/opt/homebrew/opt/openal-soft:/opt/homebrew/opt/openssl@3"
       PKG_CONFIG_PATH: "/opt/homebrew/opt/ffmpeg@6/lib/pkgconfig:/opt/homebrew/opt/openal-soft/lib/pkgconfig:/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/opt/opus/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig"
       TDE2E: "51743dfd01dff6179e2d8f7095729caa4e2222e9"
+      TLOTTIE: "4b940c7942fbde8ee56f10f39a5224a4153bd91e"
       MANUAL_CACHING: "1"
     steps:
       - name: Checkout repository
@@ -286,6 +287,37 @@ jobs:
             -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH"
           cmake --build build -j$(sysctl -n hw.logicalcpu)
           cmake --install build
+
+      - name: tlottie cache
+        id: cache-tlottie
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.LibrariesPath }}/local/tlottie
+          key: ${{ runner.os }}-tlottie-${{ env.TLOTTIE }}-${{ env.CACHE_KEY }}
+          restore-keys: |
+            ${{ runner.os }}-tlottie-
+
+      - name: Build tlottie
+        if: steps.cache-tlottie.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$LibrariesPath/local/tlottie/lib" "$LibrariesPath/local/tlottie/include/tlottie"
+          cd "$LibrariesPath"
+          git clone https://github.com/dkaraush/tlottie.git
+          cd tlottie
+          git checkout "$TLOTTIE"
+          rustup target add aarch64-apple-darwin || true
+          cargo rustc --lib --release --locked --features c-api --crate-type staticlib --target aarch64-apple-darwin
+          if [ -f "target/aarch64-apple-darwin/release/libtlottie.a" ]; then
+            cp target/aarch64-apple-darwin/release/libtlottie.a "$LibrariesPath/local/tlottie/lib/libtlottie.a"
+          elif [ -f "target/release/libtlottie.a" ]; then
+            cp target/release/libtlottie.a "$LibrariesPath/local/tlottie/lib/libtlottie.a"
+          fi
+          cp include/tlottie.h "$LibrariesPath/local/tlottie/include/tlottie/tlottie.h"
+          cp include/tlottie.h "$LibrariesPath/local/tlottie/include/tlottie.h"
+          mkdir -p "$LibrariesPath/local/lib" "$LibrariesPath/local/include/tlottie"
+          cp "$LibrariesPath/local/tlottie/lib/libtlottie.a" "$LibrariesPath/local/lib/libtlottie.a"
+          cp include/tlottie.h "$LibrariesPath/local/include/tlottie/tlottie.h"
+          cp include/tlottie.h "$LibrariesPath/local/include/tlottie.h"
 
       - name: Patch codegen scanner for ayu_ prefix
         run: |
