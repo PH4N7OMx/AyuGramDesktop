@@ -148,8 +148,8 @@ jobs:
     env:
       CMAKE_GENERATOR: "Ninja"
       CMAKE_BUILD_TYPE: "Release"
-      CMAKE_PREFIX_PATH: "/opt/homebrew/opt/ffmpeg@6:/opt/homebrew/opt/openal-soft:/opt/homebrew/opt/openssl@3:/opt/homebrew/opt/qtbase:/opt/homebrew/opt/qtshadertools:/opt/homebrew/opt/qtsvg:/opt/homebrew/opt/qtimageformats"
-      PKG_CONFIG_PATH: "/opt/homebrew/opt/ffmpeg@6/lib/pkgconfig:/opt/homebrew/opt/openal-soft/lib/pkgconfig:/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/opt/opus/lib/pkgconfig:/opt/homebrew/lib/pkgconfig"
+      CMAKE_PREFIX_PATH: "/opt/homebrew/opt/ffmpeg@6:/opt/homebrew/opt/openal-soft:/opt/homebrew/opt/openssl@3:/opt/homebrew/opt/qtbase:/opt/homebrew/opt/qtshadertools:/opt/homebrew/opt/qtsvg:/opt/homebrew/opt/qtimageformats:/opt/homebrew"
+      PKG_CONFIG_PATH: "/opt/homebrew/opt/ffmpeg@6/lib/pkgconfig:/opt/homebrew/opt/openal-soft/lib/pkgconfig:/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/opt/opus/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig"
       TDE2E: "51743dfd01dff6179e2d8f7095729caa4e2222e9"
       MANUAL_CACHING: "1"
     steps:
@@ -174,11 +174,11 @@ jobs:
 
       - name: Install dependencies via Homebrew
         run: |
-          libs="ada-url ffmpeg@6 jpeg-xl libavif libheif openal-soft openh264 openssl opus qtbase qtimageformats qtshadertools qtsvg xz"
+          libs="ada-url ffmpeg@6 jpeg-xl libavif libheif minizip openal-soft openh264 openssl opus qtbase qtimageformats qtshadertools qtsvg xz"
           brew update
           brew upgrade || true
-          brew install --overwrite autoconf automake boost cmake libtool ninja pkg-config python $libs || true
-          brew link --overwrite $libs || true
+          brew install autoconf automake boost cmake libtool ninja pkg-config python $libs
+          brew link --overwrite --force ffmpeg@6 openal-soft openssl@3 || true
 
           sudo sed -i '' '/CMAKE_${lang}_FLAGS_DEBUG_INIT/s/ -g//' /opt/homebrew/share/cmake/Modules/Compiler/GNU.cmake || true
 
@@ -187,6 +187,11 @@ jobs:
           echo "$MANUAL_CACHING" >> CACHE_KEY.txt
           echo "$GITHUB_WORKSPACE" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(md5 -q CACHE_KEY.txt)" >> $GITHUB_ENV
+
+          QT_MIN_VER=$(grep 'set(QT_SUPPORTED_MIN_MACOS_VERSION' /opt/homebrew/Cellar/qtbase/*/lib/cmake/Qt6/Qt6ConfigExtras.cmake 2>/dev/null | head -n 1 | sed -E 's/^.*"(.*)"\)$/\1/')
+          if [ -n "$QT_MIN_VER" ]; then
+            echo "MACOSX_DEPLOYMENT_TARGET=$QT_MIN_VER" >> $GITHUB_ENV
+          fi
 
           echo "LibrariesPath=$RUNNER_TEMP/Libraries" >> $GITHUB_ENV
           mkdir -p "$RUNNER_TEMP/Libraries/local"
@@ -197,7 +202,8 @@ jobs:
           WEBRTC_SHA=$(git ls-remote https://github.com/desktop-app/tg_owt.git HEAD | awk '{print $1}')
           echo "WEBRTC=$WEBRTC_SHA" >> $GITHUB_ENV
 
-          echo "PKG_CONFIG_PATH=/opt/homebrew/opt/ffmpeg@6/lib/pkgconfig:/opt/homebrew/opt/openal-soft/lib/pkgconfig:/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/opt/opus/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          ALL_PKG_CONFIG=$(find /opt/homebrew/Cellar /opt/homebrew/opt -name "pkgconfig" -type d 2>/dev/null | tr '\n' ':')
+          echo "PKG_CONFIG_PATH=${ALL_PKG_CONFIG}/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
           echo "/opt/homebrew/opt/qtbase/bin:/opt/homebrew/opt/qtshadertools/bin" >> $GITHUB_PATH
 
       - name: RNNoise cache
@@ -237,6 +243,10 @@ jobs:
           cd "$LibrariesPath"
           git clone --depth=1 --recursive --shallow-submodules https://github.com/desktop-app/tg_owt.git
           cd tg_owt
+          ALL_PKG_CONFIG=$(find /opt/homebrew/Cellar /opt/homebrew/opt -name "pkgconfig" -type d 2>/dev/null | tr '\n' ':')
+          export PKG_CONFIG_PATH="${ALL_PKG_CONFIG}/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:$PKG_CONFIG_PATH"
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          pkg-config --modversion libavcodec || pkg-config --print-errors libavcodec || true
           cmake -Bbuild . \
             -G Ninja \
             -DCMAKE_INSTALL_PREFIX="$LibrariesPath/local/tg_owt" \
@@ -291,9 +301,12 @@ jobs:
 
       - name: Configure and Build AyuGram
         run: |
+          ALL_PKG_CONFIG=$(find /opt/homebrew/Cellar /opt/homebrew/opt -name "pkgconfig" -type d 2>/dev/null | tr '\n' ':')
+          export PKG_CONFIG_PATH="${ALL_PKG_CONFIG}/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:$PKG_CONFIG_PATH"
           LOCAL_PREFIXES=$(find "$LibrariesPath/local" -mindepth 1 -maxdepth 1 -type d -exec printf ':%s' {} +)
           export CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH$LOCAL_PREFIXES"
           echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH"
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
 
           XCODE_VER=$(xcodebuild -version | awk 'NR==1{print $2}' | cut -d. -f1)
           EXTRA_FLAGS=""
@@ -307,6 +320,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DDESKTOP_APP_USE_PACKAGED=ON \
+            -DPKG_CONFIG_USE_CMAKE_PREFIX_PATH=ON \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
             $EXTRA_FLAGS
