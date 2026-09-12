@@ -150,7 +150,7 @@ jobs:
       CMAKE_BUILD_TYPE: "Release"
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
-      CMAKE_PREFIX_PATH: "/opt/homebrew/opt/ffmpeg@6:/opt/homebrew/opt/openal-soft:/opt/homebrew/opt/openssl@3:/opt/homebrew/opt/qtbase:/opt/homebrew/opt/qtshadertools:/opt/homebrew/opt/qtsvg:/opt/homebrew/opt/qtimageformats:/opt/homebrew"
+      CMAKE_PREFIX_PATH: "/opt/homebrew:/opt/homebrew/opt/ffmpeg@6:/opt/homebrew/opt/openal-soft:/opt/homebrew/opt/openssl@3"
       PKG_CONFIG_PATH: "/opt/homebrew/opt/ffmpeg@6/lib/pkgconfig:/opt/homebrew/opt/openal-soft/lib/pkgconfig:/opt/homebrew/opt/openssl@3/lib/pkgconfig:/opt/homebrew/opt/opus/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig"
       TDE2E: "51743dfd01dff6179e2d8f7095729caa4e2222e9"
       MANUAL_CACHING: "1"
@@ -322,6 +322,7 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DDESKTOP_APP_USE_PACKAGED=ON \
             -DPKG_CONFIG_USE_CMAKE_PREFIX_PATH=ON \
+            -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
             $EXTRA_FLAGS
