@@ -5,6 +5,12 @@ echo ==================================================
 echo AyuGram Desktop Auto-Builder
 echo ==================================================
 
+:: Parallel compilation jobs limit.
+:: Optimal for 16 GB RAM + AMD Ryzen 5 5600G (6 cores / 12 threads):
+:: 4 parallel compiler threads keep peak memory around 8-10 GB, preventing
+:: MSVC error C1060 (compiler out of heap space) while maintaining high speed.
+if "%MAX_JOBS%"=="" set "MAX_JOBS=4"
+
 :: 1. Find Visual Studio 2022 using vswhere
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "!VSWHERE!" (
@@ -105,9 +111,9 @@ if %ERRORLEVEL% neq 0 (
 
 :: 6. Build project
 echo ==================================================
-echo Building AyuGram (Release)...
+echo Building AyuGram (Release, !MAX_JOBS! parallel threads)...
 echo ==================================================
-cmake --build out --config Release
+cmake --build out --config Release -- /m:1 /p:CL_MPcount=!MAX_JOBS! /p:MultiProcMaxCount=!MAX_JOBS!
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Build failed.
     if "%1" neq "nopause" pause
