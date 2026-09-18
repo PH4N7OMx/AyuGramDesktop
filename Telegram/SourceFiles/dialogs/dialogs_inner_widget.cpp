@@ -1490,8 +1490,11 @@ void InnerWidget::paintEvent(QPaintEvent *e) {
 			p.translate(0, st::searchedBarHeight);
 
 			auto skip = idSearchOffset();
-			auto from = floorclamp(r.y() - skip, st::dialogsRowHeight, 0, _idSearchResults.size());
-			auto to = ceilclamp(r.y() + r.height() - skip, st::dialogsRowHeight, 0, _idSearchResults.size());
+			auto [from, to] = Ui::RowsInRange(
+				r.y() - skip,
+				r.y() + r.height() - skip,
+				st::dialogsRowHeight,
+				_idSearchResults.size());
 			p.translate(0, from * st::dialogsRowHeight);
 			if (from < _idSearchResults.size()) {
 				const auto activePeer = activeEntry.key.peer();
