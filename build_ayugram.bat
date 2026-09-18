@@ -11,6 +11,10 @@ echo ==================================================
 :: MSVC error C1060 (compiler out of heap space) while maintaining high speed.
 if "%MAX_JOBS%"=="" set "MAX_JOBS=4"
 
+:: Cleanup any stale cl.exe or msbuild.exe processes from previous aborted builds
+taskkill /F /IM cl.exe >nul 2>&1
+taskkill /F /IM msbuild.exe >nul 2>&1
+
 :: 1. Find Visual Studio 2022 using vswhere
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "!VSWHERE!" (
