@@ -51,6 +51,11 @@ enum class SendWithoutSoundOption {
 	Always = 2,
 };
 
+enum class InterfaceStyle {
+	Default = 0,
+	TelegramSwift = 1,
+};
+
 struct MentionsSettings {
 	uint64 soundId = 0;
 	int mutedUntil = 0;
@@ -86,6 +91,11 @@ NLOHMANN_JSON_SERIALIZE_ENUM(SendWithoutSoundOption, {
 	{SendWithoutSoundOption::Never, 0},
 	{SendWithoutSoundOption::InGhostMode, 1},
 	{SendWithoutSoundOption::Always, 2},
+})
+
+NLOHMANN_JSON_SERIALIZE_ENUM(InterfaceStyle, {
+	{InterfaceStyle::Default, 0},
+	{InterfaceStyle::TelegramSwift, 1},
 })
 
 class GhostModeAccountSettings {
@@ -382,6 +392,8 @@ public:
 	[[nodiscard]] bool streamerMode() const { return _streamerMode.current(); }
 	[[nodiscard]] bool loadBlockedAvatars() const { return _loadBlockedAvatars.current(); }
 	[[nodiscard]] bool channelPromoShown() const { return _channelPromoShown.current(); }
+	[[nodiscard]] InterfaceStyle interfaceStyle() const { return _interfaceStyle.current(); }
+	[[nodiscard]] bool isTelegramSwiftStyle() const { return _interfaceStyle.current() == InterfaceStyle::TelegramSwift; }
 
 	void setSaveDeletedMessages(bool val);
 	void setSaveMessagesHistory(bool val);
@@ -471,6 +483,7 @@ public:
 	void setStreamerMode(bool val);
 	void setLoadBlockedAvatars(bool val);
 	void setChannelPromoShown(bool val);
+	void setInterfaceStyle(InterfaceStyle val);
 
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeValue() const { return _useGlobalGhostMode.value(); }
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeChanges() const { return _useGlobalGhostMode.changes(); }
@@ -652,6 +665,8 @@ public:
 	[[nodiscard]] rpl::producer<bool> loadBlockedAvatarsChanges() const { return _loadBlockedAvatars.changes(); }
 	[[nodiscard]] rpl::producer<bool> channelPromoShownValue() const { return _channelPromoShown.value(); }
 	[[nodiscard]] rpl::producer<bool> channelPromoShownChanges() const { return _channelPromoShown.changes(); }
+	[[nodiscard]] rpl::producer<InterfaceStyle> interfaceStyleValue() const { return _interfaceStyle.value(); }
+	[[nodiscard]] rpl::producer<InterfaceStyle> interfaceStyleChanges() const { return _interfaceStyle.changes(); }
 
 	friend void to_json(nlohmann::json &j, const AyuSettings &s);
 	friend void from_json(const nlohmann::json &j, AyuSettings &s);
@@ -757,6 +772,7 @@ private:
 	rpl::variable<bool> _streamerMode = false;
 	rpl::variable<bool> _loadBlockedAvatars = true;
 	rpl::variable<bool> _channelPromoShown = false;
+	rpl::variable<InterfaceStyle> _interfaceStyle = InterfaceStyle::Default;
 
 	rpl::variable<bool> _useGlobalGhostMode = true;
 	std::map<uint64, std::unique_ptr<GhostModeAccountSettings>> _ghostAccounts;

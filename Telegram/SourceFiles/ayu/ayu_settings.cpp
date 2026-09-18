@@ -1265,6 +1265,12 @@ void AyuSettings::setChannelPromoShown(bool val) {
 	save();
 }
 
+void AyuSettings::setInterfaceStyle(InterfaceStyle val) {
+	if (_interfaceStyle.current() == val) return;
+	_interfaceStyle = val;
+	save();
+}
+
 void to_json(nlohmann::json &j, const AyuSettings &s) {
 	auto ghostAccounts = nlohmann::json::object();
 	for (const auto &[key, value] : s._ghostAccounts) {
@@ -1378,6 +1384,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"streamerMode", s._streamerMode.current()},
 		{"loadBlockedAvatars", s._loadBlockedAvatars.current()},
 		{"channelPromoShown", s._channelPromoShown.current()},
+		{"interfaceStyle", s._interfaceStyle.current()},
 		{"messageShotSettings", s._messageShotSettings}
 	};
 }
@@ -1509,6 +1516,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._streamerMode = j.value("streamerMode", defaults._streamerMode.current());
 	s._loadBlockedAvatars = j.value("loadBlockedAvatars", defaults._loadBlockedAvatars.current());
 	s._channelPromoShown = j.value("channelPromoShown", defaults._channelPromoShown.current());
+	s._interfaceStyle = j.value("interfaceStyle", defaults._interfaceStyle.current());
 
 	if (j.contains("messageShotSettings") && j["messageShotSettings"].is_object()) {
 		j["messageShotSettings"].get_to(s._messageShotSettings);
