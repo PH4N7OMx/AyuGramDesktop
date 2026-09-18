@@ -112,6 +112,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_settings.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/platform/base_platform_haptic.h"
+#include "boxes/peer_list_controllers.h"
+#include "calls/calls_box_controller.h"
+#include "styles/style_menu_icons.h"
 
 
 namespace Dialogs {
@@ -861,6 +864,10 @@ Widget::Widget(
 
 		setupMoreChatsBar();
 		setupDownloadBar();
+		if (AyuSettings::getInstance().isTelegramSwiftStyle()) {
+			setupMacBottomBar();
+			_mainMenu.toggle->setIconOverride(&st::menuIconEdit, &st::menuIconEdit);
+		}
 	}
 	setupSwipeBack();
 
@@ -1676,6 +1683,90 @@ void Widget::setupDownloadBar() {
 			}
 		}
 	}, lifetime());
+}
+
+void Widget::setupMacBottomBar() {
+	if (_layout == Layout::Child || _macBottomBar) {
+		return;
+	}
+	_macBottomBar = object_ptr<Ui::RpWidget>(this);
+	_macBottomBar->resize(width(), 48);
+
+	class TabButton final : public Ui::RippleButton {
+	public:
+		TabButton(QWidget *parent, const style::icon &icon, bool active)
+		: Ui::RippleButton(parent, st::defaultRippleAnimation)
+		, _icon(icon)
+		, _active(active) {
+		}
+
+		void setActive(bool active) {
+			_active = active;
+			update();
+		}
+
+	protected:
+		void paintEvent(QPaintEvent *e) override {
+			QPainter p(this);
+			paintRipple(p, 0, 0);
+
+			const auto x = (width() - _icon.width()) / 2;
+			const auto y = (height() - _icon.height()) / 2;
+			if (_active) {
+				_icon.paint(p, x, y, width(), st::windowActiveTextFg->c);
+			} else {
+				const auto &color = isOver() ? st::dialogsNameFg : st::dialogsTextFgService;
+				_icon.paint(p, x, y, width(), color->c);
+			}
+		}
+
+	private:
+		const style::icon &_icon;
+		bool _active = false;
+	};
+
+	auto tabContacts = Ui::CreateChild<TabButton>(_macBottomBar.data(), st::menuIconUserShow, false);
+	auto tabCalls = Ui::CreateChild<TabButton>(_macBottomBar.data(), st::menuIconPhone, false);
+	auto tabChats = Ui::CreateChild<TabButton>(_macBottomBar.data(), st::menuIconDiscussion, true);
+	auto tabSettings = Ui::CreateChild<TabButton>(_macBottomBar.data(), st::menuIconSettings, false);
+
+	tabContacts->setAccessibleName(tr::lng_menu_contacts(tr::now));
+	tabCalls->setAccessibleName(tr::lng_menu_calls(tr::now));
+	tabChats->setAccessibleName(tr::lng_filters_all(tr::now));
+	tabSettings->setAccessibleName(tr::lng_menu_settings(tr::now));
+
+	tabContacts->setClickedCallback([=] {
+		controller()->show(PrepareContactsBox(controller()));
+	});
+	tabCalls->setClickedCallback([=] {
+		::Calls::ShowCallsBox(controller());
+	});
+	tabChats->setClickedCallback([=] {
+		scrollToDefault(true);
+	});
+	tabSettings->setClickedCallback([=] {
+		controller()->showSettings();
+	});
+
+	_macBottomBar->paintRequest(
+	) | rpl::on_next([=] {
+		QPainter p(_macBottomBar.data());
+		p.fillRect(_macBottomBar->rect(), st::dialogsBg);
+		p.fillRect(0, 0, _macBottomBar->width(), st::lineWidth, st::shadowFg);
+	}, _macBottomBar->lifetime());
+
+	_macBottomBar->sizeValue(
+	) | rpl::on_next([=](QSize size) {
+		const auto count = 4;
+		const auto tabw = size.width() / count;
+		const auto h = size.height();
+		tabContacts->setGeometry(0, 0, tabw, h);
+		tabCalls->setGeometry(tabw, 0, tabw, h);
+		tabChats->setGeometry(tabw * 2, 0, tabw, h);
+		tabSettings->setGeometry(tabw * 3, 0, size.width() - tabw * 3, h);
+	}, _macBottomBar->lifetime());
+
+	_macBottomBar->show();
 }
 
 void Widget::updateScrollUpVisibility() {
@@ -4653,12 +4744,16 @@ void Widget::updateControlsGeometry() {
 	const auto narrowRatio = (ratiow < smallw)
 		? ((smallw - ratiow) / float64(smallw - _narrowWidth))
 		: 0.;
-
+	const auto isMacStyle = AyuSettings::getInstance().isTelegramSwiftStyle();
 	auto filterLeft = (controller()->filtersWidth()
 		? st::dialogsFilterSkip
+		: isMacStyle
+		? (st::dialogsFilterPadding.x() + 2)
 		: (st::dialogsFilterPadding.x() + _mainMenu.toggle->width()))
 		+ st::dialogsFilterPadding.x();
-	const auto filterRight = st::dialogsFilterSkip
+	const auto filterRight = (isMacStyle
+		? (_mainMenu.toggle->width() + st::dialogsFilterPadding.x())
+		: st::dialogsFilterSkip)
 		+ st::dialogsFilterPadding.x();
 	const auto filterWidth = std::max(ratiow, smallw)
 		- filterLeft
@@ -4680,11 +4775,17 @@ void Widget::updateControlsGeometry() {
 		filterWidth,
 		_search->height());
 
-	auto mainMenuLeft = anim::interpolate(
-		st::dialogsFilterPadding.x(),
-		(_narrowWidth - _mainMenu.toggle->width()) / 2,
-		narrowRatio);
-	_mainMenu.toggle->moveToLeft(mainMenuLeft, st::dialogsFilterPadding.y());
+	if (isMacStyle && !controller()->filtersWidth() && _layout != Layout::Child) {
+		_mainMenu.toggle->moveToRight(
+			st::dialogsFilterPadding.x(),
+			st::dialogsFilterPadding.y());
+	} else {
+		auto mainMenuLeft = anim::interpolate(
+			st::dialogsFilterPadding.x(),
+			(_narrowWidth - _mainMenu.toggle->width()) / 2,
+			narrowRatio);
+		_mainMenu.toggle->moveToLeft(mainMenuLeft, st::dialogsFilterPadding.y());
+	}
 	_mainMenu.under->setGeometry(
 		0,
 		0,
@@ -4749,6 +4850,7 @@ void Widget::updateControlsGeometry() {
 	putBottomButton(_updateTelegram);
 	putBottomButton(_downloadBar);
 	putBottomButton(_loadMoreChats);
+	putBottomButton(_macBottomBar);
 	if (_connecting) {
 		_connecting->setBottomSkip(bottomSkip);
 	}
