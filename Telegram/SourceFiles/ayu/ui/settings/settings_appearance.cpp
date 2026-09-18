@@ -186,27 +186,8 @@ void BuildAvatarCorners(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 
 void BuildAppearance(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	auto *settings = &AyuSettings::getInstance();
-	const auto controller = builder.controller();
 
 	builder.addSubsectionTitle(tr::ayu_CategoryAppearance());
-
-	ayu.addChooseButton({
-		.id = u"ayu/interfaceStyle"_q,
-		.title = rpl::single(QString::fromUtf8("Стиль оформления")),
-		.boxTitle = rpl::single(QString::fromUtf8("Стиль оформления")),
-		.initialSelection = static_cast<int>(settings->interfaceStyle()),
-		.options = {
-			QString::fromUtf8("По умолчанию (Telegram Desktop)"),
-			QString::fromUtf8("macOS (Telegram Swift)"),
-		},
-		.setter = [controller](int index) {
-			const auto style = static_cast<InterfaceStyle>(index);
-			if (AyuSettings::getInstance().interfaceStyle() != style) {
-				AyuSettings::getInstance().setInterfaceStyle(style);
-				ShowRestartPrompt(controller);
-			}
-		},
-	});
 
 	ayu.addSettingToggle({
 		.id = u"ayu/materialSwitches"_q,
@@ -229,6 +210,7 @@ void BuildAppearance(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.setter = &AyuSettings::setHidePremiumStatuses,
 	});
 
+	const auto controller = builder.controller();
 	builder.addButton({
 		.id = u"ayu/monoFont"_q,
 		.title = tr::ayu_MonospaceFont(),

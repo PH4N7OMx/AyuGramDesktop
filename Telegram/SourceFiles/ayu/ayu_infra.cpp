@@ -14,7 +14,6 @@
 #include "features/translator/ayu_translator.h"
 #include "lang/lang_instance.h"
 #include "ui/chat/chat_style_radius.h"
-#include "ayu/ayu_ui_settings.h"
 #include "utils/rc_manager.h"
 
 #ifdef Q_OS_WIN
@@ -37,7 +36,6 @@ void initLang() {
 void initUiSettings() {
 	const auto &settings = AyuSettings::getInstance();
 	Ui::SetAppliedBubbleRadius(settings.messageBubbleRadius());
-	AyuUiSettings::setTelegramSwiftStyle(settings.isTelegramSwiftStyle());
 }
 
 void initDatabase() {

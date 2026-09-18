@@ -560,9 +560,6 @@ void TopBarWidget::paintEvent(QPaintEvent *e) {
 	const auto slidingTop = std::max(selectedButtonsTop, searchFieldTop);
 
 	p.fillRect(QRect(0, 0, width(), st::topBarHeight), st::topBarBg);
-	if (AyuSettings::getInstance().isTelegramSwiftStyle()) {
-		p.fillRect(0, st::topBarHeight - st::lineWidth, width(), st::lineWidth, st::shadowFg);
-	}
 	if (slidingTop < 0) {
 		p.translate(0, slidingTop + st::topBarHeight);
 		paintTopBar(p);

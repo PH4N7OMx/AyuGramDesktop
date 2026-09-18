@@ -132,7 +132,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_peer_menu.h"
 #include "window/window_session_controller.h"
 #include "mainwindow.h"
-#include "styles/style_basic.h"
 #include "styles/style_calls.h"
 #include "styles/style_chat.h"
 #include "styles/style_chat_helpers.h"
@@ -5692,23 +5691,6 @@ void ComposeControls::paintBackground(QPainter &p, QRect full, QRect clip) {
 				- _st.starsSkip);
 		}
 		p.drawRoundedRect(full, _st.radius, _st.radius);
-	} else if (AyuSettings::getInstance().isTelegramSwiftStyle()) {
-		p.fillRect(clip, _st.bg);
-		p.fillRect(QRect(0, 0, full.width(), 1), st::shadowFg);
-		if (_field && !_field->isHidden()) {
-			auto hq = PainterHighQualityEnabler(p);
-			const auto fieldGeom = _field->geometry();
-			const auto leftX = _attachToggle ? (_attachToggle->x() - 4) : (fieldGeom.x() - 10);
-			const auto rightX = _tabbedSelectorToggle ? (_tabbedSelectorToggle->x() + _tabbedSelectorToggle->width() + 4) : (fieldGeom.right() + 10);
-			const auto pillRect = QRect(
-				leftX,
-				fieldGeom.y() - 6,
-				rightX - leftX,
-				fieldGeom.height() + 12);
-			p.setPen(Qt::NoPen);
-			p.setBrush(st::windowBgOver);
-			p.drawRoundedRect(pillRect, 18, 18);
-		}
 	} else {
 		p.fillRect(clip, _st.bg);
 	}

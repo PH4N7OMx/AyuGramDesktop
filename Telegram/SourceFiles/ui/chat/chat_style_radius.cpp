@@ -14,9 +14,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/ui_utility.h"
 #include "styles/style_chat.h"
 
-// AyuGram includes
-#include "ayu/ayu_settings.h"
-
 namespace Ui {
 namespace {
 
@@ -34,9 +31,6 @@ int BubbleRadiusOverride = -1;
 }
 
 [[nodiscard]] int EffectiveBubbleRadiusValue() {
-	if (AyuSettings::getInstance().isTelegramSwiftStyle()) {
-		return kBubbleRadiusSliderMax;
-	}
 	return (BubbleRadiusOverride >= 0)
 		? BubbleRadiusOverride
 		: AppliedBubbleRadius;

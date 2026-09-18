@@ -50,7 +50,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/unread_badge.h"
 #include "ui/unread_badge_paint.h"
 #include "ui/unread_counter_format.h"
-#include "styles/style_basic.h"
 #include "styles/style_dialogs.h"
 #include "styles/style_dialogs_layout.h"
 #include "styles/style_widgets.h"
@@ -495,33 +494,15 @@ void PaintRow(
 			* -2;
 		swipeMirrored = !context.quickActionContext->data.inverted;
 	}
-	const auto isMacStyle = AyuSettings::getInstance().isTelegramSwiftStyle();
-	if (isMacStyle && !context.narrow) {
-		p.fillRect(geometry, context.currentBg);
-		if (context.active || context.selected) {
-			auto hq = PainterHighQualityEnabler(p);
-			p.setPen(Qt::NoPen);
-			p.setBrush(bg);
-			const auto pillRect = geometry.marginsRemoved(QMargins(8, 2, 8, 2));
-			p.drawRoundedRect(pillRect, 10, 10);
-		}
-	} else {
-		p.fillRect(geometry, bg);
+	if (swipeTranslation) {
+		p.translate(swipeMirrored ? swipeTranslation : -swipeTranslation, 0);
 	}
+	p.fillRect(geometry, bg);
 	if (!(flags & Flag::TopicJumpRipple)) {
 		auto ripple = context.active
 			? st::dialogsRippleBgActive
 			: st::dialogsRippleBg;
-		if (isMacStyle && !context.narrow) {
-			p.save();
-			QPainterPath clipPath;
-			clipPath.addRoundedRect(geometry.marginsRemoved(QMargins(8, 2, 8, 2)), 10, 10);
-			p.setClipPath(clipPath);
-			row->paintRipple(p, 0, 0, context.width, &ripple->c);
-			p.restore();
-		} else {
-			row->paintRipple(p, 0, 0, context.width, &ripple->c);
-		}
+		row->paintRipple(p, 0, 0, context.width, &ripple->c);
 	}
 
 	const auto origOpacity = p.opacity();
@@ -1133,13 +1114,6 @@ void PaintRow(
 	}
 	if (isForbiddenOrLeft) {
 		p.setOpacity(origOpacity);
-	}
-	if (isMacStyle && !context.narrow && !context.active) {
-		const auto sepLeft = context.st->padding.left() + context.st->photoSize + context.st->padding.left();
-		const auto sepRight = geometry.width() - 8;
-		if (sepRight > sepLeft) {
-			p.fillRect(QRect(sepLeft, geometry.bottom() - 1, sepRight - sepLeft, 1), st::shadowFg);
-		}
 	}
 }
 
