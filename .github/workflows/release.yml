@@ -199,6 +199,12 @@ jobs:
           if brew list --versions openssl@1.1 >/dev/null 2>&1; then
             brew unlink openssl@1.1
           fi
+          openssl_bin="$(brew --prefix)/bin/openssl"
+          if [ -L "$openssl_bin" ]; then
+            case "$(readlink "$openssl_bin")" in
+              */openssl@1.1/*) rm "$openssl_bin" ;;
+            esac
+          fi
           brew install autoconf automake boost cmake libtool ninja pkg-config python $libs
           brew link --overwrite --force ffmpeg@6 openal-soft openssl@3 || true
 
