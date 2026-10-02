@@ -43,12 +43,14 @@ void MessageShotBox::prepare() {
 }
 
 void MessageShotBox::setupContent() {
-	_selectedPalette = std::make_shared<style::palette>(*_config.st);
+	_selectedPalette = std::make_shared<style::palette>();
+	*_selectedPalette = *_config.st;
 	AyuFeatures::MessageShot::setPersistedPalette(_selectedPalette);
 
 	AyuFeatures::MessageShot::ensureChatThemesRefreshed();
 
 	using namespace Settings;
+	const auto savedSimpleQuotesAndReplies = AyuSettings::getInstance().simpleQuotesAndReplies();
 	auto &shotSettings = AyuSettings::getInstance().messageShotSettings();
 	shotSettings.clearTheme();
 	shotSettings.setShowDate(true);
