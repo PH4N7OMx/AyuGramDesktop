@@ -193,8 +193,12 @@ jobs:
 
       - name: Install dependencies via Homebrew
         run: |
-          libs="ada-url ffmpeg@6 jpeg-xl libavif libheif minizip openal-soft openh264 openssl opus qtbase qtimageformats qtshadertools qtsvg xz"
+          libs="ada-url ffmpeg@6 jpeg-xl libavif libheif minizip openal-soft openh264 openssl@3 opus qtbase qtimageformats qtshadertools qtsvg xz"
           brew update
+          # Runner images may link OpenSSL 1.1 into paths needed by newer dependencies.
+          if brew list --versions openssl@1.1 >/dev/null 2>&1; then
+            brew unlink openssl@1.1
+          fi
           brew install autoconf automake boost cmake libtool ninja pkg-config python $libs
           brew link --overwrite --force ffmpeg@6 openal-soft openssl@3 || true
 
@@ -206,7 +210,7 @@ jobs:
           echo "$GITHUB_WORKSPACE" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(md5 -q CACHE_KEY.txt)" >> $GITHUB_ENV
 
-          QT_MIN_VER=$(grep 'set(QT_SUPPORTED_MIN_MACOS_VERSION' /opt/homebrew/Cellar/qtbase/*/lib/cmake/Qt6/Qt6ConfigExtras.cmake 2>/dev/null | head -n 1 | sed -E 's/^.*"(.*)"\)$/\1/')
+          QT_MIN_VER=$(grep 'set(QT_SUPPORTED_MIN_MACOS_VERSION' /opt/homebrew/Cellar/qtbase/*/lib/cmake/Qt6/Qt6ConfigExtras.cmake 2>/dev/null | head -n 1 | sed -E 's/^.*"(.*)"\)$/\1/' || true)
           if [ -n "$QT_MIN_VER" ]; then
             echo "MACOSX_DEPLOYMENT_TARGET=$QT_MIN_VER" >> $GITHUB_ENV
           fi
@@ -220,8 +224,6 @@ jobs:
           WEBRTC_SHA=$(git ls-remote https://github.com/desktop-app/tg_owt.git HEAD | awk '{print $1}')
           echo "WEBRTC=$WEBRTC_SHA" >> $GITHUB_ENV
 
-          ALL_PKG_CONFIG=$(find /opt/homebrew/Cellar /opt/homebrew/opt -name "pkgconfig" -type d 2>/dev/null | tr '\n' ':')
-          echo "PKG_CONFIG_PATH=${ALL_PKG_CONFIG}/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
           echo "/opt/homebrew/opt/qtbase/bin:/opt/homebrew/opt/qtshadertools/bin" >> $GITHUB_PATH
 
       - name: RNNoise cache
@@ -261,8 +263,6 @@ jobs:
           cd "$LibrariesPath"
           git clone --depth=1 --recursive --shallow-submodules https://github.com/desktop-app/tg_owt.git
           cd tg_owt
-          ALL_PKG_CONFIG=$(find /opt/homebrew/Cellar /opt/homebrew/opt -name "pkgconfig" -type d 2>/dev/null | tr '\n' ':')
-          export PKG_CONFIG_PATH="${ALL_PKG_CONFIG}/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:$PKG_CONFIG_PATH"
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
           pkg-config --modversion libavcodec || pkg-config --print-errors libavcodec || true
           cmake -Bbuild . \
@@ -361,8 +361,6 @@ jobs:
 
       - name: Configure and Build AyuGram
         run: |
-          ALL_PKG_CONFIG=$(find /opt/homebrew/Cellar /opt/homebrew/opt -name "pkgconfig" -type d 2>/dev/null | tr '\n' ':')
-          export PKG_CONFIG_PATH="${ALL_PKG_CONFIG}/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:$PKG_CONFIG_PATH"
           LOCAL_PREFIXES=$(find "$LibrariesPath/local" -mindepth 1 -maxdepth 1 -type d -exec printf ':%s' {} +)
           export CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH$LOCAL_PREFIXES"
           echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH"
