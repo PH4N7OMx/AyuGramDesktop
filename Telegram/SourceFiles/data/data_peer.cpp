@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "data/data_peer.h"
+#include "ayu/utils/account_info.h"
 
 #include "api/api_sensitive_content.h"
 #include "data/data_user.h"
@@ -878,6 +879,11 @@ void PeerData::setBarSettings(const MTPPeerSettings &data) {
 				= qs(data.vbusiness_bot_manage_url().value_or_empty());
 			_barDetails->paysPerMessage
 				= data.vcharge_paid_message_stars().value_or_empty();
+		}
+		if (const auto user = asUser()) {
+			if (Ayu::AccountInfo::Observe(user)) {
+				session().changes().peerUpdated(this, UpdateFlag::FullInfo);
+			}
 		}
 		using Flag = PeerBarSetting;
 		setBarSettings((data.is_add_contact() ? Flag::AddContact : Flag())

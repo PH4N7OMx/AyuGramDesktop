@@ -5,6 +5,7 @@
 //
 // Copyright @Radolyn, 2026
 #include "ayu/utils/telegram_helpers.h"
+#include "ayu/utils/account_info.h"
 
 #include "apiwrap.h"
 #include "lang_auto.h"
@@ -1559,27 +1560,28 @@ static TextWithEntities formatJoinDateText(not_null<UserData*> user, const QStri
 }
 
 void getUserRegistrationDate(not_null<UserData*> user, Fn<void(TextWithEntities)> callback, PeerData *contextPeer) {
-	const auto userId = getBareID(user);
-	const auto estimatedDate = estimateUserRegistrationDate(userId);
-	const auto formattedDate = langDayOfMonthFull(estimatedDate);
+	Ayu::AccountInfo::Observe(user);
+	const auto confirmed = Ayu::AccountInfo::KnownRegistration(user);
+	const auto localEstimate = confirmed.isValid()
+		? QDate() : Ayu::AccountInfo::EstimateRegistration(user);
+	const auto date = confirmed.isValid()
+		? confirmed
+		: localEstimate.isValid()
+		? localEstimate
+		: estimateUserRegistrationDate(getBareID(user));
+	const auto formattedDate = langMonthOfYearFull(date.month(), date.year());
 
 	TextWithEntities regResult;
-	if (user->isSelf()) {
+	if (confirmed.isValid()) {
+		regResult.text = tr::lng_new_contact_registration(tr::now)
+			+ u": "_q + formattedDate + u" (Telegram)"_q;
+	} else if (user->isSelf()) {
 		regResult = tr::ayu_CreationDateSelfApproximately(
-			tr::now,
-			lt_item,
-			TextWithEntities{ formattedDate },
-			tr::rich
-		);
+			tr::now, lt_item, TextWithEntities{ formattedDate }, tr::rich);
 	} else {
 		regResult = tr::ayu_CreationDateUserApproximately(
-			tr::now,
-			lt_item1,
-			TextWithEntities{ user->name() },
-			lt_item2,
-			TextWithEntities{ formattedDate },
-			tr::rich
-		);
+			tr::now, lt_item1, TextWithEntities{ user->name() },
+			lt_item2, TextWithEntities{ formattedDate }, tr::rich);
 	}
 
 	if (contextPeer && contextPeer != user) {
