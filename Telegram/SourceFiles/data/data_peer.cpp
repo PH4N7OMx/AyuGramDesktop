@@ -769,24 +769,7 @@ bool PeerData::canEditMessagesIndefinitely() const {
 }
 
 bool PeerData::canExportChatHistory() const {
-	if (isRepliesChat() || isVerifyCodes() || !allowsForwarding()) {
-		return false;
-	} else if (const auto channel = asChannel()) {
-		if (!channel->amIn() && channel->invitePeekExpires()) {
-			return false;
-		}
-	}
-	for (const auto &block : _owner->history(id)->blocks) {
-		for (const auto &message : block->messages) {
-			if (!message->data()->isService()) {
-				return true;
-			}
-		}
-	}
-	if (const auto from = migrateFrom()) {
-		return from->canExportChatHistory();
-	}
-	return false;
+	return !isRepliesChat() && !isVerifyCodes();
 }
 
 bool PeerData::autoTranslation() const {

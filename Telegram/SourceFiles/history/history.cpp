@@ -3438,8 +3438,7 @@ bool History::shouldBeInChatList() const {
 	} else if (const auto channel = peer->asChannel()) {
 		if (!channel->amIn()) {
 			if (AyuSettings::getInstance().keepForbiddenChats()
-				&& channel->wasIn()
-				&& (channel->haveLeft() || channel->isForbidden())
+				&& channel->wasRemoved()
 				&& (lastMessageKnown() && lastMessage() != nullptr)) {
 				return true;
 			}
@@ -3448,11 +3447,11 @@ bool History::shouldBeInChatList() const {
 	} else if (const auto chat = peer->asChat()) {
 		if (!chat->amIn()) {
 			if (AyuSettings::getInstance().keepForbiddenChats()
-				&& chat->wasIn()
-				&& (chat->haveLeft() || chat->isForbidden())
+				&& chat->wasRemoved()
 				&& (lastMessageKnown() && lastMessage() != nullptr)) {
 				return true;
 			}
+			return false;
 		}
 		return chat->amIn()
 			|| !lastMessageKnown()
@@ -3543,11 +3542,6 @@ void History::applyDialog(
 	}
 	if (const auto ttl = data.vttl_period()) {
 		peer->setMessagesTTL(ttl->v);
-	}
-	if (const auto channel = peer->asChannel()) {
-		channel->setWasIn(true);
-	} else if (const auto chat = peer->asChat()) {
-		chat->setWasIn(true);
 	}
 	owner().histories().dialogEntryApplied(this);
 }

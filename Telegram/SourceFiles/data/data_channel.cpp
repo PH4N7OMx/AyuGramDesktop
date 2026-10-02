@@ -222,8 +222,9 @@ void ChannelData::setFlags(ChannelDataFlags which) {
 		mgInfo->ensureForum(this);
 	}
 	_flags.set(which);
-	if (amIn()) {
+	if (amIn() && isLoaded()) {
 		_wasIn = true;
+		_leftVoluntarily = false;
 	}
 	if (diff & (Flag::Left | Flag::Forbidden)) {
 		if (const auto chat = getMigrateFromChat()) {
@@ -232,9 +233,11 @@ void ChannelData::setFlags(ChannelDataFlags which) {
 		}
 
 		if (wasIn && !amIn()) {
-			if (!AyuSettings::getInstance().keepForbiddenChats()) {
+			if (!AyuSettings::getInstance().keepForbiddenChats() || !wasRemoved()) {
 				crl::on_main(&session(), [=] {
-					if (!amIn()) {
+					if (!amIn()
+						&& (!AyuSettings::getInstance().keepForbiddenChats()
+							|| !wasRemoved())) {
 						Core::App().closeChatFromWindows(this);
 					}
 				});

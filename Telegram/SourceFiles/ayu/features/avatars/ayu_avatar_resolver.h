@@ -37,6 +37,7 @@ public:
 private:
 	struct ResolveTask {
 		UserId userId = 0;
+		QString cacheKey;
 		base::weak_ptr<Main::Session> session;
 		QString username;
 	};
@@ -47,7 +48,9 @@ private:
 	void processQueue();
 	void fetchHtml(ResolveTask task);
 	void fetchImage(ResolveTask task, const QString &avatarUrl);
-	void onRequestDone(const QString &usernameLower);
+	void onRequestDone(const QString &cacheKey);
+	[[nodiscard]] UserData *currentUser(const ResolveTask &task) const;
+	bool applyFromDiskCache(not_null<UserData*> user, const QString &cacheKey);
 	void applyUserpic(
 		not_null<UserData*> user,
 		const QImage &image,
@@ -57,7 +60,10 @@ private:
 	std::deque<ResolveTask> _queue;
 	base::flat_set<QString> _inProgress;
 	base::flat_map<QString, crl::time> _negativeCache;
+	base::flat_map<QString, crl::time> _lastHtmlCheck;
+	base::flat_map<QString, PhotoId> _appliedPhotoIds;
 	int _activeRequests = 0;
+
 };
 
 namespace Ayu {

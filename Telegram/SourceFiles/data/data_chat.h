@@ -85,10 +85,19 @@ public:
 		return !isForbidden() && !isDeactivated() && !haveLeft();
 	}
 	[[nodiscard]] bool wasIn() const {
-		return _wasIn || amIn();
+		return _wasIn;
 	}
 	void setWasIn(bool val = true) {
 		_wasIn = val;
+		if (val) {
+			_leftVoluntarily = false;
+		}
+	}
+	void setLeftVoluntarily(bool value) {
+		_leftVoluntarily = value;
+	}
+	[[nodiscard]] bool wasRemoved() const {
+		return wasIn() && !_leftVoluntarily && isForbidden();
 	}
 	[[nodiscard]] bool haveLeft() const {
 		return flags() & ChatDataFlag::Left;
@@ -213,6 +222,7 @@ private:
 	ChannelData *_migratedTo = nullptr;
 	rpl::lifetime _lifetime;
 	bool _wasIn = false;
+	bool _leftVoluntarily = false;
 
 };
 

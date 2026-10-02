@@ -1022,6 +1022,9 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 			| (data.is_noforwards() ? Flag::NoForwards : Flag())
 			| (data.is_ayuNoforwards() ? Flag::AyuNoForwards : Flag());
 		chat->setFlags((chat->flags() & ~flagsMask) | flagsSet);
+		if (chat->amIn()) {
+			chat->setWasIn();
+		}
 		chat->count = data.vparticipants_count().v;
 
 		if (canAddMembers != chat->canAddMembers()) {
@@ -1205,6 +1208,9 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 						: Flag()))
 				: Flag::StarsPerMessageKnown);
 		channel->setFlags((channel->flags() & ~flagsMask) | flagsSet);
+		if (!minimal && channel->amIn()) {
+			channel->setWasIn();
+		}
 		channel->setBotVerifyDetailsIcon(
 			data.vbot_verification_icon().value_or_empty());
 		if (!minimal && storiesState) {

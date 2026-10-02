@@ -7,6 +7,8 @@
 #include "ayu/features/message_shot/message_shot.h"
 
 #include "qguiapplication.h"
+
+#include <type_traits>
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/boxes/message_shot_box.h"
 #include "ayu/utils/telegram_helpers.h"
@@ -35,6 +37,7 @@
 #include "ui/effects/path_shift_gradient.h"
 #include "ui/layers/box_content.h"
 #include "window/themes/window_theme.h"
+#include "window/section_widget.h"
 
 namespace AyuFeatures::MessageShot {
 
@@ -88,7 +91,9 @@ public:
 		not_null<QWidget*> parent,
 		not_null<Ui::ChatStyle*> st,
 		Fn<void()> update,
-		not_null<History*> history);
+		not_null<History*> history,
+		HistoryView::ElementChatMode chatMode,
+		HistoryView::Context context);
 
 	bool elementAnimationsPaused() override;
 	not_null<Ui::PathShiftGradient*> elementPathShiftGradient() override;
@@ -100,16 +105,23 @@ private:
 	const not_null<QWidget*> _parent;
 	const std::unique_ptr<Ui::PathShiftGradient> _pathGradient;
 	not_null<History*> _history;
+	const HistoryView::ElementChatMode _chatMode;
+	const HistoryView::Context _context;
+
 };
 
 MessageShotDelegate::MessageShotDelegate(
 	not_null<QWidget*> parent,
 	not_null<Ui::ChatStyle*> st,
 	Fn<void()> update,
-	not_null<History*> history)
+	not_null<History*> history,
+	HistoryView::ElementChatMode chatMode,
+	HistoryView::Context context)
 	: _parent(parent)
 	  , _pathGradient(HistoryView::MakePathShiftGradient(st, update))
-	  , _history(history) {
+	  , _history(history)
+	  , _chatMode(chatMode)
+	  , _context(context) {
 }
 
 bool MessageShotDelegate::elementAnimationsPaused() {
@@ -122,7 +134,7 @@ auto MessageShotDelegate::elementPathShiftGradient()
 }
 
 HistoryView::Context MessageShotDelegate::elementContext() {
-	return HistoryView::Context::AdminLog;
+	return _context;
 }
 
 bool MessageShotDelegate::elementHideReply(not_null<const HistoryView::Element*> view) {
@@ -141,8 +153,7 @@ bool MessageShotDelegate::elementHideReply(not_null<const HistoryView::Element*>
 }
 
 HistoryView::ElementChatMode MessageShotDelegate::elementChatMode() {
-	using Mode = HistoryView::ElementChatMode;
-	return Mode::Wide;
+	return _chatMode;
 }
 
 QImage removeEmptySpaceAround(const QImage &original) {
@@ -219,7 +230,9 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 		{
 			box->update();
 		},
-		messages.front()->history());
+		messages.front()->history(),
+		config.chatMode,
+		config.context);
 
 	// remove deleted messages
 	messages.erase(
@@ -308,7 +321,8 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 		takingShot = true;
 
 		// calculate the size of the image
-		int width = st::msgMaxWidth + (st::boxPadding.left() + st::boxPadding.right());
+		int width = st::msgMaxWidth
+			+ st::boxPadding.left() + st::boxPadding.right();
 		int height = 0;
 
 		for (int i = 0; i < messages.size(); i++) {
@@ -330,12 +344,24 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 		image.setDevicePixelRatio(style::DevicePixelRatio());
 		image.fill(Qt::transparent);
 
-		const auto viewport = QRect(0, 0, width, height);
+		const auto viewport = QRect(
+			0,
+			0,
+			width / style::DevicePixelRatio(),
+			height / style::DevicePixelRatio());
 
 		base::flat_map<not_null<PeerData*>, Ui::PeerUserpicView> userpics;
 		base::flat_map<MsgId, Ui::PeerUserpicView> hiddenSenderUserpics;
 
 		Painter p(&image);
+		if (showBackground) {
+			Window::SectionWidget::PaintBackground(
+				p,
+				controller->currentChatTheme(),
+				viewport.size(),
+				viewport,
+				true);
+		}
 
 		// draw the messages
 		int y = 0;
@@ -362,14 +388,14 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 				return false;
 			}();
 
-			const auto hasPhoto = view->displayFromPhoto() || view->hasFromPhoto() || message->isPost();
+			const auto hasPhoto = view->displayFromPhoto();
 			const auto displayUserpic = hasPhoto && !isSameSenderWithNext;
 
-			const auto rect = QRect(0, 0, width, view->height());
+			const auto rect = QRect(0, 0, viewport.width(), view->height());
 
-			auto context = controller->defaultChatTheme()->preparePaintContext(
+			auto context = controller->currentChatTheme()->preparePaintContext(
 				st.get(),
-				viewport,
+				viewport.translated(0, -y),
 				rect,
 				rect,
 				true);
@@ -390,7 +416,7 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 						userpics[from],
 						picX,
 						picY,
-						width,
+						viewport.width(),
 						st::msgPhotoSize,
 						context.paused);
 				} else if (const auto info = message->displayHiddenSenderInfo()) {
@@ -399,7 +425,7 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 							p,
 							picX,
 							picY,
-							width,
+							viewport.width(),
 							st::msgPhotoSize);
 					}
 				}
@@ -408,22 +434,13 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 			y += view->height();
 		}
 
+		p.end();
 		takingShot = false;
 
-		auto result = addPadding(removeEmptySpaceAround(image));
-		if (!showBackground) {
-			callback(result, final);
-			return;
-		}
-
-		auto newResult = QImage(result.size(), QImage::Format_ARGB32_Premultiplied);
-		newResult.setDevicePixelRatio(style::DevicePixelRatio());
-		newResult.fill(makeDefaultBackgroundColor());
-
-		Painter painter(&newResult);
-		painter.drawImage(0, 0, result);
-
-		callback(newResult, final);
+		auto result = showBackground
+			? std::move(image)
+			: addPadding(removeEmptySpaceAround(image));
+		callback(result, final);
 	};
 
 	if (!preload->documents.empty() || !preload->photos.empty()) {
@@ -468,13 +485,6 @@ namespace {
 
 std::shared_ptr<Ui::ChatStyle> BuildShotChatStyle(
 		not_null<Window::SessionController*> controller) {
-	const auto &shot = AyuSettings::getInstance().messageShotSettings();
-	const auto hasSavedTheme = shot.embeddedThemeType() != -1
-		|| shot.cloudThemeId() != 0;
-	const auto persistedPalette = getPersistedPalette();
-	if (hasSavedTheme && persistedPalette) {
-		return std::make_shared<Ui::ChatStyle>(persistedPalette.get());
-	}
 	return std::make_shared<Ui::ChatStyle>(controller->chatStyle());
 }
 
@@ -483,6 +493,8 @@ void ShowMessageShotBox(
 		ResolveMessage resolveMessage,
 		not_null<Window::SessionController*> controller,
 		const MessageIdsList &ids,
+		HistoryView::ElementChatMode chatMode,
+		HistoryView::Context context,
 		Fn<void()> clearSelected) {
 	auto messages = std::vector<not_null<HistoryItem*>>();
 	messages.reserve(ids.size());
@@ -499,6 +511,8 @@ void ShowMessageShotBox(
 		controller,
 		BuildShotChatStyle(controller),
 		messages,
+		chatMode,
+		context,
 	};
 	auto box = Box<MessageShotBox>(config);
 	const auto raw = box.data();
@@ -525,10 +539,19 @@ void WrapperImpl(
 		return;
 	}
 
+	const auto context = [&] {
+		if constexpr (std::is_same_v<Widget, HistoryInner>) {
+			return HistoryView::Context::History;
+		} else {
+			return widget->elementContext();
+		}
+	}();
 	ShowMessageShotBox(
 		[=](const auto item) { return session->data().message(item); },
 		controller,
 		items,
+		widget->elementChatMode(),
+		context,
 		std::move(clearSelected));
 }
 

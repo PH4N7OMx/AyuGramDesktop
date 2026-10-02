@@ -171,6 +171,9 @@ bool UserData::updateLastseen(Data::LastseenStatus value) {
 	}
 	_lastseen = value;
 	owner().maybeStopWatchForOffline(this);
+	if (_lastseen.isLongAgo() && !hasUserpic() && !username().isEmpty()) {
+		Ayu::AyuAvatarResolver::Instance().resolve(this);
+	}
 	return true;
 }
 

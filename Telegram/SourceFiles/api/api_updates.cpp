@@ -2476,6 +2476,47 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 			update.c_updateSavedDialogPinned());
 	} break;
 
+	case mtpc_updateChannelParticipant: {
+		const auto &d = update.c_updateChannelParticipant();
+		if (UserId(d.vuser_id().v) != session().userId()) {
+			break;
+		}
+		const auto channel = session().data().channelLoaded(d.vchannel_id());
+		if (!channel) {
+			break;
+		}
+		const auto participant = d.vnew_participant();
+		const auto banned = participant
+			&& participant->type() == mtpc_channelParticipantBanned
+			&& participant->c_channelParticipantBanned()
+				.vbanned_rights().c_chatBannedRights().is_view_messages();
+		if (!participant || banned) {
+			if (d.vprev_participant()) {
+				channel->setWasIn();
+			}
+			channel->setLeftVoluntarily(UserId(d.vactor_id().v) == session().userId());
+			channel->markForbidden();
+		}
+	} break;
+
+	case mtpc_updateChatParticipant: {
+		const auto &d = update.c_updateChatParticipant();
+		if (UserId(d.vuser_id().v) != session().userId() || d.vnew_participant()) {
+			break;
+		}
+		if (const auto chat = session().data().chatLoaded(d.vchat_id())) {
+			if (d.vprev_participant()) {
+				chat->setWasIn();
+			}
+			chat->setLeftVoluntarily(UserId(d.vactor_id().v) == session().userId());
+			chat->setFlags(chat->flags() | ChatDataFlag::Forbidden);
+			if (const auto history = session().data().historyLoaded(chat)) {
+				history->updateChatListExistence();
+			}
+			session().changes().peerUpdated(chat, Data::PeerUpdate::Flag::Members);
+		}
+	} break;
+
 	case mtpc_updateChannel: {
 		const auto &d = update.c_updateChannel();
 		if (const auto channel = session().data().channelLoaded(d.vchannel_id())) {

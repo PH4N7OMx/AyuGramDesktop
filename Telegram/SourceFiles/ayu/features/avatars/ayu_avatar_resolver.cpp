@@ -27,6 +27,8 @@
 #include <QtCore/QFileInfo>
 #include <QtCore/QRegularExpression>
 #include <QtCore/QTimer>
+#include <QtCore/QSaveFile>
+#include <QtGui/QImageReader>
 #include <QtGui/QImage>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkRequest>
@@ -36,7 +38,12 @@ namespace {
 constexpr auto kMaxActiveRequests = 2;
 constexpr auto kNegativeCacheTtl = crl::time(2 * 3600 * 1000);
 constexpr auto kNetworkErrorTtl = crl::time(15 * 60 * 1000);
+constexpr auto kHtmlRecheckInterval = crl::time(5 * 60 * 1000);
 constexpr auto kRequestTimeoutMs = 5000;
+constexpr auto kMaxHtmlBytes = 1024 * 1024;
+constexpr auto kMaxImageBytes = 8 * 1024 * 1024;
+constexpr auto kMaxImageDimension = 4096;
+constexpr auto kMaxQueuedRequests = 256;
 constexpr auto kUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
 using UpdateFlag = Data::PeerUpdate::Flag;
@@ -45,9 +52,14 @@ bool IsValidAvatarUrl(const QString &url) {
 	if (!url.startsWith(u"https://"_q, Qt::CaseInsensitive)) {
 		return false;
 	}
-	const auto isCdn = url.contains(u"telesco.pe"_q, Qt::CaseInsensitive)
-		|| url.contains(u"telegram.org/file/"_q, Qt::CaseInsensitive);
-	if (!isCdn) {
+	const auto parsed = QUrl(url);
+	const auto host = parsed.host().toLower();
+	const auto isCdn = host == u"telesco.pe"_q
+		|| host.endsWith(u".telesco.pe"_q)
+		|| (host == u"telegram.org"_q
+			&& parsed.path().startsWith(u"/file/"_q));
+	if (!isCdn || !parsed.userInfo().isEmpty()
+		|| (parsed.port() != -1 && parsed.port() != 443)) {
 		return false;
 	}
 	if (url.endsWith(u".svg"_q, Qt::CaseInsensitive)
@@ -92,6 +104,56 @@ QString ExtractAvatarUrl(const QString &html) {
 	return {};
 }
 
+QImage DecodeAvatar(const QByteArray &bytes) {
+	if (bytes.isEmpty() || bytes.size() > kMaxImageBytes) {
+		return {};
+	}
+	auto buffer = QBuffer();
+	buffer.setData(bytes);
+	buffer.open(QIODevice::ReadOnly);
+	auto reader = QImageReader(&buffer);
+	const auto size = reader.size();
+	if (!size.isValid() || size.width() > kMaxImageDimension
+		|| size.height() > kMaxImageDimension) {
+		return {};
+	}
+	return reader.read();
+}
+
+QString UserpicKey(not_null<UserData*> user) {
+	return QString::number(user->session().userId().bare)
+		+ u"_"_q + QString::number(peerToUser(user->id).bare);
+}
+
+QString AvatarsDir() {
+	return cWorkingDir() + u"tdata/ayu/avatars/"_q;
+}
+
+QString ImageFilePath(const QString &cacheKey) {
+	return AvatarsDir() + cacheKey + u".jpg"_q;
+}
+
+QString UrlFilePath(const QString &cacheKey) {
+	return AvatarsDir() + cacheKey + u".url"_q;
+}
+
+QString ReadCachedUrl(const QString &cacheKey) {
+	auto file = QFile(UrlFilePath(cacheKey));
+	if (!file.open(QIODevice::ReadOnly)) {
+		return {};
+	}
+	return QString::fromUtf8(file.readAll()).trimmed();
+}
+
+void WriteCachedUrl(const QString &cacheKey, const QString &url) {
+	QDir().mkpath(AvatarsDir());
+	auto file = QSaveFile(UrlFilePath(cacheKey));
+	if (file.open(QIODevice::WriteOnly)) {
+		file.write(url.toUtf8());
+		file.commit();
+	}
+}
+
 } // namespace
 
 AyuAvatarResolver &AyuAvatarResolver::Instance() {
@@ -105,53 +167,86 @@ void AyuAvatarResolver::resolve(not_null<UserData*> user) {
 	if (!AyuSettings::getInstance().loadBlockedAvatars()) {
 		return;
 	}
+
+	if (user->isSelf() || user->isBot() || user->isSupport() || user->isInaccessible()) {
+		return;
+	}
+
+	if (!user->lastseen().isLongAgo()) {
+		return;
+	}
+
+	const auto userId = peerToUser(user->id);
+	const auto username = user->username();
+	static const auto validUsername = QRegularExpression(u"^[A-Za-z0-9_]+$"_q);
+	if (!validUsername.match(username).hasMatch()) {
+		return;
+	}
+	const auto cacheKey = QString::number(user->session().userId().bare)
+		+ u"_"_q + QString::number(userId.bare)
+		+ u"_"_q + username.toLower();
+
 	if (user->hasUserpic()) {
-		const auto id = user->userpicPhotoId();
-		if (id && user->owner().photo(id)->date()) {
+		const auto it = _appliedPhotoIds.find(UserpicKey(user));
+		if (it == _appliedPhotoIds.end() || it->second != user->userpicPhotoId()) {
 			return;
 		}
 	}
-	const auto username = user->username();
-	if (username.isEmpty()) {
-		return;
-	}
-	const auto usernameLower = username.toLower();
 
-	const auto negIt = _negativeCache.find(usernameLower);
+	if (!user->hasUserpic()) {
+		applyFromDiskCache(user, cacheKey);
+	}
+
+	const auto negIt = _negativeCache.find(cacheKey);
 	if (negIt != _negativeCache.end()) {
-		if (negIt->second + kNegativeCacheTtl > crl::now()) {
+		if (negIt->second > crl::now()) {
 			return;
 		}
 		_negativeCache.erase(negIt);
 	}
 
-	const auto diskDir = cWorkingDir() + u"tdata/ayu/avatars/"_q;
-	const auto diskFilePath = diskDir + usernameLower + u".jpg"_q;
-	const auto fileInfo = QFileInfo(diskFilePath);
-	if (fileInfo.exists() && fileInfo.size() > 0) {
-		auto file = QFile(diskFilePath);
-		if (file.open(QIODevice::ReadOnly)) {
-			const auto bytes = file.readAll();
-			const auto image = QImage::fromData(bytes);
-			if (!image.isNull()) {
-				applyUserpic(user, image, bytes);
-				return;
-			}
+	const auto checkIt = _lastHtmlCheck.find(cacheKey);
+	if (checkIt != _lastHtmlCheck.end()
+		&& checkIt->second + kHtmlRecheckInterval > crl::now()) {
+		if (!user->hasUserpic()) {
+			applyFromDiskCache(user, cacheKey);
 		}
-		QFile::remove(diskFilePath);
-	}
-
-	if (_inProgress.contains(usernameLower)) {
 		return;
 	}
 
-	_inProgress.insert(usernameLower);
+	if (_inProgress.contains(cacheKey)) {
+		return;
+	}
+
+	if (_queue.size() >= kMaxQueuedRequests) {
+		return;
+	}
+	_inProgress.insert(cacheKey);
 	_queue.push_back(ResolveTask{
-		.userId = peerToUser(user->id),
+		.userId = userId,
+		.cacheKey = cacheKey,
 		.session = base::make_weak(&user->session()),
 		.username = username,
 	});
 	processQueue();
+}
+
+bool AyuAvatarResolver::applyFromDiskCache(not_null<UserData*> user, const QString &cacheKey) {
+	const auto imgPath = ImageFilePath(cacheKey);
+	const auto fi = QFileInfo(imgPath);
+	if (!fi.exists() || fi.size() <= 0 || fi.size() > kMaxImageBytes) {
+		return false;
+	}
+	auto file = QFile(imgPath);
+	if (file.open(QIODevice::ReadOnly)) {
+		const auto bytes = file.readAll();
+		const auto image = DecodeAvatar(bytes);
+		if (!image.isNull()) {
+			applyUserpic(user, image, bytes);
+			return true;
+		}
+	}
+	return false;
 }
 
 void AyuAvatarResolver::processQueue() {
@@ -159,8 +254,8 @@ void AyuAvatarResolver::processQueue() {
 		auto task = std::move(_queue.front());
 		_queue.pop_front();
 
-		if (!task.session.get()) {
-			_inProgress.erase(task.username.toLower());
+		if (!currentUser(task)) {
+			_inProgress.erase(task.cacheKey);
 			continue;
 		}
 
@@ -178,6 +273,12 @@ void AyuAvatarResolver::fetchHtml(ResolveTask task) {
 		QNetworkRequest::NoLessSafeRedirectPolicy);
 
 	const auto reply = _networkManager.get(request);
+	const auto limit = (url.host() == u"t.me"_q) ? kMaxHtmlBytes : kMaxImageBytes;
+	connect(reply, &QIODevice::readyRead, reply, [=] {
+		if (reply->bytesAvailable() > limit) {
+			reply->abort();
+		}
+	});
 
 	QTimer::singleShot(kRequestTimeoutMs, reply, [reply] {
 		if (reply && reply->isRunning()) {
@@ -187,19 +288,49 @@ void AyuAvatarResolver::fetchHtml(ResolveTask task) {
 
 	connect(reply, &QNetworkReply::finished, this, [this, reply, task = std::move(task)]() mutable {
 		reply->deleteLater();
-		const auto usernameLower = task.username.toLower();
+		if (!currentUser(task)) {
+			onRequestDone(task.cacheKey);
+			return;
+		}
 
 		if (reply->error() != QNetworkReply::NoError) {
-			_negativeCache[usernameLower] = crl::now() - kNegativeCacheTtl + kNetworkErrorTtl;
-			onRequestDone(usernameLower);
+			_negativeCache[task.cacheKey] = crl::now() + kNetworkErrorTtl;
+			onRequestDone(task.cacheKey);
 			return;
 		}
 
 		const auto html = QString::fromUtf8(reply->readAll());
 		const auto avatarUrl = ExtractAvatarUrl(html);
+
+		_lastHtmlCheck[task.cacheKey] = crl::now();
+
 		if (avatarUrl.isEmpty()) {
-			_negativeCache[usernameLower] = crl::now();
-			onRequestDone(usernameLower);
+			_negativeCache[task.cacheKey] = crl::now() + kNegativeCacheTtl;
+			QFile::remove(ImageFilePath(task.cacheKey));
+			QFile::remove(UrlFilePath(task.cacheKey));
+			if (const auto session = task.session.get()) {
+				const auto user = session->data().user(task.userId);
+				const auto it = _appliedPhotoIds.find(UserpicKey(user));
+				if (it != _appliedPhotoIds.end() && it->second == user->userpicPhotoId()) {
+					user->setUserpic(PhotoId(), ImageLocation(), false);
+					user->session().changes().peerUpdated(user, UpdateFlag::Photo);
+				}
+			}
+			_appliedPhotoIds.erase(UserpicKey(currentUser(task)));
+			onRequestDone(task.cacheKey);
+			return;
+		}
+
+		const auto cachedUrl = ReadCachedUrl(task.cacheKey);
+		if (cachedUrl == avatarUrl && QFileInfo(ImageFilePath(task.cacheKey)).size() > 0) {
+			if (const auto session = task.session.get()) {
+				const auto user = session->data().user(task.userId);
+				if (!user->hasUserpic() && !applyFromDiskCache(user, task.cacheKey)) {
+					fetchImage(std::move(task), avatarUrl);
+					return;
+				}
+			}
+			onRequestDone(task.cacheKey);
 			return;
 		}
 
@@ -208,10 +339,17 @@ void AyuAvatarResolver::fetchHtml(ResolveTask task) {
 }
 
 void AyuAvatarResolver::fetchImage(ResolveTask task, const QString &avatarUrl) {
-	auto request = QNetworkRequest(QUrl(avatarUrl));
+	const auto url = QUrl(avatarUrl);
+	auto request = QNetworkRequest(url);
 	request.setRawHeader("User-Agent", kUserAgent);
 
 	const auto reply = _networkManager.get(request);
+	const auto limit = (url.host() == u"t.me"_q) ? kMaxHtmlBytes : kMaxImageBytes;
+	connect(reply, &QIODevice::readyRead, reply, [=] {
+		if (reply->bytesAvailable() > limit) {
+			reply->abort();
+		}
+	});
 
 	QTimer::singleShot(kRequestTimeoutMs, reply, [reply] {
 		if (reply && reply->isRunning()) {
@@ -219,27 +357,30 @@ void AyuAvatarResolver::fetchImage(ResolveTask task, const QString &avatarUrl) {
 		}
 	});
 
-	connect(reply, &QNetworkReply::finished, this, [this, reply, task = std::move(task)]() mutable {
+	connect(reply, &QNetworkReply::finished, this, [this, reply, task = std::move(task), avatarUrl]() mutable {
 		reply->deleteLater();
-		const auto usernameLower = task.username.toLower();
+		if (!currentUser(task)) {
+			onRequestDone(task.cacheKey);
+			return;
+		}
 
 		if (reply->error() != QNetworkReply::NoError) {
-			_negativeCache[usernameLower] = crl::now() - kNegativeCacheTtl + kNetworkErrorTtl;
-			onRequestDone(usernameLower);
+			_negativeCache[task.cacheKey] = crl::now() + kNetworkErrorTtl;
+			onRequestDone(task.cacheKey);
 			return;
 		}
 
 		const auto bytes = reply->readAll();
 		if (bytes.isEmpty()) {
-			_negativeCache[usernameLower] = crl::now();
-			onRequestDone(usernameLower);
+			_negativeCache[task.cacheKey] = crl::now() + kNegativeCacheTtl;
+			onRequestDone(task.cacheKey);
 			return;
 		}
 
-		const auto image = QImage::fromData(bytes);
+		const auto image = DecodeAvatar(bytes);
 		if (image.isNull()) {
-			_negativeCache[usernameLower] = crl::now();
-			onRequestDone(usernameLower);
+			_negativeCache[task.cacheKey] = crl::now() + kNegativeCacheTtl;
+			onRequestDone(task.cacheKey);
 			return;
 		}
 
@@ -248,32 +389,49 @@ void AyuAvatarResolver::fetchImage(ResolveTask task, const QString &avatarUrl) {
 			jpegBytes.clear();
 			auto buffer = QBuffer(&jpegBytes);
 			buffer.open(QIODevice::WriteOnly);
-			image.save(&buffer, "JPG", 87);
+			if (!image.save(&buffer, "JPG", 87)) {
+				_negativeCache[task.cacheKey] = crl::now() + kNetworkErrorTtl;
+				onRequestDone(task.cacheKey);
+				return;
+			}
 		}
 
-		const auto diskDir = cWorkingDir() + u"tdata/ayu/avatars/"_q;
-		QDir().mkpath(diskDir);
-		const auto filePath = diskDir + usernameLower + u".jpg"_q;
-		auto file = QFile(filePath);
-		if (file.open(QIODevice::WriteOnly)) {
-			file.write(jpegBytes);
-			file.close();
+		QDir().mkpath(AvatarsDir());
+		auto imgFile = QSaveFile(ImageFilePath(task.cacheKey));
+		if (imgFile.open(QIODevice::WriteOnly)
+			&& imgFile.write(jpegBytes) == jpegBytes.size()
+			&& imgFile.commit()) {
+			WriteCachedUrl(task.cacheKey, avatarUrl);
 		}
 
 		if (const auto session = task.session.get()) {
 			const auto user = session->data().user(task.userId);
-			const auto id = user->userpicPhotoId();
-			if (!user->hasUserpic() || !id || !user->owner().photo(id)->date()) {
+			const auto it = _appliedPhotoIds.find(UserpicKey(user));
+			const auto isOurUserpic = (it != _appliedPhotoIds.end() && it->second == user->userpicPhotoId());
+			if (!user->hasUserpic() || isOurUserpic) {
 				applyUserpic(user, image, jpegBytes);
 			}
 		}
 
-		onRequestDone(usernameLower);
+		onRequestDone(task.cacheKey);
 	});
 }
 
-void AyuAvatarResolver::onRequestDone(const QString &usernameLower) {
-	_inProgress.erase(usernameLower);
+UserData *AyuAvatarResolver::currentUser(const ResolveTask &task) const {
+	const auto session = task.session.get();
+	if (!session || !AyuSettings::getInstance().loadBlockedAvatars()) {
+		return nullptr;
+	}
+	const auto user = session->data().user(task.userId);
+	return user->username() == task.username
+		&& user->lastseen().isLongAgo()
+		&& !user->isSelf() && !user->isBot()
+		&& !user->isSupport() && !user->isInaccessible()
+		? user.get() : nullptr;
+}
+
+void AyuAvatarResolver::onRequestDone(const QString &cacheKey) {
+	_inProgress.erase(cacheKey);
 	--_activeRequests;
 	processQueue();
 }
@@ -304,6 +462,8 @@ void AyuAvatarResolver::applyUserpic(
 		ImageWithLocation(),
 		0);
 	user->owner().keepAlive(media);
+
+	_appliedPhotoIds[UserpicKey(user)] = photoId;
 
 	user->setUserpic(photoId, imgWithLoc.location, false);
 	user->session().changes().peerUpdated(user, UpdateFlag::Photo);

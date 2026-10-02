@@ -43,35 +43,17 @@ void MessageShotBox::prepare() {
 }
 
 void MessageShotBox::setupContent() {
-	_selectedPalette = AyuFeatures::MessageShot::getPersistedPalette();
-	if (!_selectedPalette) {
-		_selectedPalette = std::make_shared<style::palette>();
-	}
+	_selectedPalette = std::make_shared<style::palette>(*_config.st);
 	AyuFeatures::MessageShot::setPersistedPalette(_selectedPalette);
 
 	AyuFeatures::MessageShot::ensureChatThemesRefreshed();
 
-	auto &settings = AyuSettings::getInstance();
-	auto &shotSettings = settings.messageShotSettings();
-	const auto savedSimpleQuotesAndReplies = settings.simpleQuotesAndReplies();
-	settings.setSimpleQuotesAndReplies(!shotSettings.showColorfulReplies());
-
 	using namespace Settings;
-
-	auto savedThemeApplyResult = AyuFeatures::MessageShot::SavedThemeApplyResult::Failed;
-	const auto hasSavedTheme = shotSettings.embeddedThemeType() != -1
-		|| shotSettings.cloudThemeId() != 0;
-	if (hasSavedTheme) {
-		savedThemeApplyResult = AyuFeatures::MessageShot::applySavedThemePalette(
-			_selectedPalette,
-			nullptr);
-		if (savedThemeApplyResult != AyuFeatures::MessageShot::SavedThemeApplyResult::Failed) {
-			_config.st = std::make_shared<Ui::ChatStyle>(_selectedPalette.get());
-		} else {
-			shotSettings.clearTheme();
-			_config.st = std::make_shared<Ui::ChatStyle>(_config.controller->chatStyle());
-		}
-	}
+	auto &shotSettings = AyuSettings::getInstance().messageShotSettings();
+	shotSettings.clearTheme();
+	shotSettings.setShowDate(true);
+	shotSettings.setShowReactions(true);
+	shotSettings.setRevealSpoilers(false);
 
 	AyuFeatures::MessageShot::setShotConfig(_config);
 
@@ -223,19 +205,6 @@ void MessageShotBox::setupContent() {
 		});
 	};
 
-	if (savedThemeApplyResult == AyuFeatures::MessageShot::SavedThemeApplyResult::AwaitingAsync) {
-		const auto weakBox = base::make_weak(this);
-		AyuFeatures::MessageShot::subscribeToCloudThemeLoad(
-			_config.controller,
-			_selectedPalette,
-			[=] {
-				if (!weakBox) {
-					return;
-				}
-				_config.st = std::make_shared<Ui::ChatStyle>(_selectedPalette.get());
-				updatePreview();
-			});
-	}
 
 	auto selectedTheme =
 		content->lifetime().make_state<rpl::variable<QString>>(

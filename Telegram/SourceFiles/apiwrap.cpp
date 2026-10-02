@@ -2001,6 +2001,7 @@ void ApiWrap::leaveChannel(not_null<ChannelData*> channel) {
 			channel->inputChannel()
 		)).done([=](const MTPUpdates &result) {
 			_channelAmInRequests.remove(channel);
+			channel->setLeftVoluntarily(true);
 			applyUpdates(result);
 		}).fail([=] {
 			_channelAmInRequests.remove(channel);
@@ -2236,6 +2237,7 @@ void ApiWrap::deleteConversation(not_null<PeerData*> peer, bool revoke) {
 			chat->inputChat(),
 			_session->user()->inputUser()
 		)).done([=](const MTPUpdates &result) {
+			chat->setLeftVoluntarily(true);
 			applyUpdates(result);
 			deleteHistory(peer, false, revoke);
 		}).fail([=] {
