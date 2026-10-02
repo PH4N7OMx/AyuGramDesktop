@@ -417,4 +417,148 @@ jobs:
         with:
           files: out/Release/macOS.dmg
 
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    timeout-minutes: 360
+    env:
+      LibrariesPath: ${{ github.workspace }}\TBuild\Libraries\win64
+      ThirdPartyPath: ${{ github.workspace }}\TBuild\ThirdParty
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: TBuild/AyuGram
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: TBuild/AyuGram
+          fetch-depth: 0
 
+      - name: Initialize submodules
+        run: |
+          git submodule update --init --depth=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Read build configuration
+        id: configuration
+        run: |
+          $instructions = Get-Content docs/building-win.md -Raw
+          $sdk = [regex]::Match($instructions, '\*\*([\d.]+)\*\* SDK version').Groups[1].Value
+          if (-not $sdk) { throw 'Windows SDK version is missing from docs/building-win.md.' }
+          "sdk=$sdk" >> $env:GITHUB_OUTPUT
+
+      - name: Initialize Visual Studio
+        uses: Eden-CI/msvc-dev-cmd@1bd71f95d6f3d1b2b3395b335cc63bcdc90cf223
+        with:
+          arch: x64
+          sdk: ${{ steps.configuration.outputs.sdk }}
+          toolset: '14.44'
+
+      - name: Restore tools cache
+        id: cache-tools
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.ThirdPartyPath }}
+          key: windows-2022-x64-tools-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}
+          restore-keys: windows-2022-x64-tools-
+
+      - name: Restore libraries cache
+        id: cache-libs
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\*
+            !${{ env.LibrariesPath }}\cache_keys
+            !${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\*
+            !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: windows-2022-x64-libs-${{ steps.configuration.outputs.sdk }}-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}
+          restore-keys: windows-2022-x64-libs-
+
+      - name: Restore Qt cache
+        id: cache-qt
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: windows-2022-x64-qt-${{ steps.configuration.outputs.sdk }}-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}
+          restore-keys: windows-2022-x64-qt-
+
+      - name: Prepare dependencies
+        shell: cmd
+        run: |
+          call Telegram\build\prepare\win.bat silent
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Save tools cache
+        if: steps.cache-tools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.ThirdPartyPath }}
+          key: ${{ steps.cache-tools.outputs.cache-primary-key }}
+
+      - name: Save libraries cache
+        if: steps.cache-libs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\*
+            !${{ env.LibrariesPath }}\cache_keys
+            !${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\*
+            !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: ${{ steps.cache-libs.outputs.cache-primary-key }}
+
+      - name: Save Qt cache
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: ${{ steps.cache-qt.outputs.cache-primary-key }}
+
+      - name: Configure and build AyuGram
+        shell: cmd
+        run: |
+          cd Telegram
+          call configure.bat x64 ^
+            -D TDESKTOP_API_ID=2040 ^
+            -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 ^
+            -D CMAKE_CONFIGURATION_TYPES=Release ^
+            -D DESKTOP_APP_ENABLE_LTO=OFF
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --build ..\out --config Release --target Telegram --parallel 2
+          if errorlevel 1 exit /b %errorlevel%
+
+      - name: Package Windows binaries
+        run: |
+          $output = Join-Path $PWD 'out\Release'
+          $binary = @('Telegram.exe', 'AyuGram.exe') |
+            ForEach-Object { Join-Path $output $_ } |
+            Where-Object { Test-Path -LiteralPath $_ } |
+            Select-Object -First 1
+          if (-not $binary) { throw "Application executable was not found in $output." }
+          $package = Join-Path $env:RUNNER_TEMP 'AyuGram-Windows\AyuGram'
+          New-Item -ItemType Directory -Path "$package\TelegramForcePortable" -Force | Out-Null
+          New-Item -ItemType File -Path "$package\TelegramForcePortable\.keep" -Force | Out-Null
+          Copy-Item -LiteralPath $binary -Destination $package
+          $updater = Join-Path $output 'Updater.exe'
+          if (Test-Path -LiteralPath $updater) {
+            Copy-Item -LiteralPath $updater -Destination $package
+          }
+          Compress-Archive -LiteralPath $package -DestinationPath "$output\Windows.zip" -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AyuGram-Windows-x64
+          path: TBuild/AyuGram/out/Release/Windows.zip
+          if-no-files-found: error
+          retention-days: 14
