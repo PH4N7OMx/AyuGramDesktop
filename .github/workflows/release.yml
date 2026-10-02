@@ -1,7 +1,12 @@
 name: Automatic Release Builder
 
 on:
+  push:
   workflow_dispatch:
+
+concurrency:
+  group: release-build-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
