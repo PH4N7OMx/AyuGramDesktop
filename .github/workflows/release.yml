@@ -25,17 +25,7 @@ jobs:
           submodules: recursive
 
       - name: Patch codegen scanner for ayu_ prefix
-        run: |
-          python3 -c "
-          import re
-          p = 'Telegram/codegen/codegen/lang/subsets.cpp'
-          c = open(p).read()
-          pattern = r'if \(data\[i\] != \'l\'\s*\|\| data\[i \+ 1\] != \'n\'\s*\|\| data\[i \+ 2\] != \'g\'\s*\|\| data\[i \+ 3\] != \'_\''
-          replacement = 'const auto isLng = (data[i] == \'l\' && data[i + 1] == \'n\' && data[i + 2] == \'g\' && data[i + 3] == \'_\');\\n\\t\\tconst auto isAyu = (data[i] == \'a\' && data[i + 1] == \'y\' && data[i + 2] == \'u\' && data[i + 3] == \'_\');\\n\\t\\tif ((!isLng && !isAyu)'
-          c, n = re.subn(pattern, replacement, c)
-          print(f'Patched {n} occurrences in {p}')
-          open(p, 'w').write(c)
-          "
+        run: python3 Telegram/build/patch_codegen.py
 
       - name: Patch tgcalls CryptoHelper for Xcode 16 / Clang
         run: |
@@ -345,17 +335,7 @@ jobs:
           cp include/tlottie.h "$LibrariesPath/local/include/tlottie.h"
 
       - name: Patch codegen scanner for ayu_ prefix
-        run: |
-          python3 -c "
-          import re
-          p = 'Telegram/codegen/codegen/lang/subsets.cpp'
-          c = open(p).read()
-          pattern = r'if \(data\[i\] != \'l\'\s*\|\| data\[i \+ 1\] != \'n\'\s*\|\| data\[i \+ 2\] != \'g\'\s*\|\| data\[i \+ 3\] != \'_\''
-          replacement = 'const auto isLng = (data[i] == \'l\' && data[i + 1] == \'n\' && data[i + 2] == \'g\' && data[i + 3] == \'_\');\\n\\t\\tconst auto isAyu = (data[i] == \'a\' && data[i + 1] == \'y\' && data[i + 2] == \'u\' && data[i + 3] == \'_\');\\n\\t\\tif ((!isLng && !isAyu)'
-          c, n = re.subn(pattern, replacement, c)
-          print(f'Patched {n} occurrences in {p}')
-          open(p, 'w').write(c)
-          "
+        run: python3 Telegram/build/patch_codegen.py
 
       - name: Patch tgcalls CryptoHelper for Xcode 16 / Clang
         run: |
@@ -450,6 +430,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
+
+      - name: Patch codegen scanner for ayu_ prefix
+        run: python Telegram/build/patch_codegen.py
 
       - name: Read build configuration
         id: configuration
