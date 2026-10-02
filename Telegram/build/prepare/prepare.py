@@ -60,6 +60,10 @@ usedPrefix = os.path.realpath(os.path.join(libsDir, 'local'))
 optionsList = [
     'qt6',
     'skip-release',
+    'skip-debug',
+    'tools-only',
+    'libraries-only',
+    'qt-only',
     'build-stackwalk',
     'qt-asserts',
 ]
@@ -76,6 +80,11 @@ for arg in sys.argv[1:]:
     elif arg == 'shell':
         customRunCommand = True
         runCommand.append('shell')
+
+if 'skip-debug' in options and (not win or 'skip-release' in options):
+    error('skip-debug requires Windows and cannot be combined with skip-release.')
+if sum(option in options for option in ('tools-only', 'libraries-only', 'qt-only')) > 1:
+    error('Select only one dependency group.')
 
 if not os.path.isdir(os.path.join(libsDir, keysLoc)):
     pathlib.Path(os.path.join(libsDir, keysLoc)).mkdir(parents=True, exist_ok=True)
@@ -232,7 +241,15 @@ def filterByPlatform(commands):
     dependencies = []
     version = '0'
     skip = False
+    # Configuration guards must not change the active platform scope.
+    debugOnly = False
     for command in commands:
+        if command == 'debug:':
+            debugOnly = True
+            continue
+        elif command == 'enddebug:':
+            debugOnly = False
+            continue
         m = re.match(r'(!?)([a-z0-9_]+):', command)
         if m and m.group(2) != 'depends' and m.group(2) != 'version':
             scopes = m.group(2).split('_')
@@ -254,10 +271,12 @@ def filterByPlatform(commands):
                     inscope = False
                 elif len(scopes) == 1:
                     continue
+            if 'releaseonly' in scopes:
+                inscope = inscope and 'skip-debug' in options
             if 'asserts' in scopes:
                 inscope = inscope and 'qt-asserts' in options
             skip = inscope if m.group(1) == '!' else not inscope
-        elif not skip and not re.match(r'\s*#', command):
+        elif not skip and not (debugOnly and 'skip-debug' in options) and not re.match(r'\s*#', command):
             if m and m.group(2) == 'version':
                 version = version + '.' + command[len(m.group(0)):].strip()
             elif m and m.group(2) == 'depends':
@@ -364,6 +383,11 @@ class _GetchWindows:
 
 getch = _Getch()
 
+def dependencyGroup(stage):
+    if stage['location'] == 'ThirdParty':
+        return 'tools'
+    return 'qt' if stage['name'].startswith('qt_') else 'libraries'
+
 def runStages():
     onlyStages = []
     rebuildStale = False
@@ -384,6 +408,13 @@ def runStages():
     count = len(stages)
     index = 0
     for stage in stages:
+        group = dependencyGroup(stage)
+        if any(option in options and group != expected for option, expected in (
+            ('tools-only', 'tools'),
+            ('libraries-only', 'libraries'),
+            ('qt-only', 'qt'),
+        )):
+            continue
         if len(onlyStages) > 0 and not stage['name'] in onlyStages:
             continue
         index = index + 1
@@ -550,7 +581,9 @@ win:
 winarm:
     SET "ToolsetProp=/property:PlatformToolset=v145"
 win:
+debug:
     msbuild -m LzmaLib.sln /property:Configuration=Debug /property:Platform="$X8664" %ToolsetProp%
+enddebug:
 release:
     msbuild -m LzmaLib.sln /property:Configuration=Release /property:Platform="$X8664" %ToolsetProp%
 """)
@@ -580,7 +613,9 @@ win:
         -DZLIB_BUILD_MINIZIP=ON ^
         -DZLIB_MINIZIP_BUILD_SHARED=OFF ^
         -DZLIB_MINIZIP_BUILD_TESTING=OFF
+debug:
     cmake --build . --config Debug
+enddebug:
 release:
     cmake --build . --config Release
 mac:
@@ -613,7 +648,9 @@ win:
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ^
         -DWITH_JPEG8=ON ^
         -DPNG_SUPPORTED=OFF
+debug:
     cmake --build . --config Debug
+enddebug:
 release:
     cmake --build . --config Release
 mac:
@@ -645,6 +682,7 @@ mac:
 stage('openssl3', """
     git clone --depth 1 -b openssl-3.2.1 https://github.com/openssl/openssl openssl3
     cd openssl3
+debug:
 win32:
     perl Configure no-shared no-tests debug-VC-WIN32 /FS
 win64:
@@ -661,6 +699,7 @@ release:
     move out.dbg\\ossl_static.pdb out.dbg\\ossl_static
     jom clean
     move out.dbg\\ossl_static out.dbg\\ossl_static.pdb
+enddebug:
 win32_release:
     perl Configure no-shared no-tests VC-WIN32 /FS
 win64_release:
@@ -696,7 +735,9 @@ win:
     cmake -B out . ^
         -DCMAKE_INSTALL_PREFIX=%LIBS_DIR%/local ^
         -DOPUS_STATIC_RUNTIME=ON
+debug:
     cmake --build out --config Debug
+enddebug:
     cmake --build out --config Release
     cmake --install out --config Release
 mac:
@@ -715,7 +756,9 @@ stage('rnnoise', """
     cd out
 win:
     cmake .. -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>"
+debug:
     cmake --build . --config Debug
+enddebug:
 release:
     cmake --build . --config Release
 !win:
@@ -797,9 +840,11 @@ win:
 
 depends:python/Scripts/activate.bat
     %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
+debug:
     meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=debug -Denable_tools=false -Denable_tests=false %DAV1D_ASM_DISABLE% -Db_vscrt=mtd builddir-debug
     meson compile -C builddir-debug
     meson install -C builddir-debug
+enddebug:
 release:
     meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=release -Denable_tools=false -Denable_tests=false -Db_vscrt=mt builddir-release
     meson compile -C builddir-release
@@ -857,9 +902,11 @@ win:
 
 depends:python/Scripts/activate.bat
     %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
+debug:
     meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=debug -Db_vscrt=mtd builddir-debug
     meson compile -C builddir-debug
     meson install -C builddir-debug
+enddebug:
 release:
     meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=release -Db_vscrt=mt builddir-release
     meson compile -C builddir-release
@@ -902,8 +949,10 @@ win:
         -DAVIF_ENABLE_WERROR=OFF ^
         -DAVIF_CODEC_DAV1D=SYSTEM ^
         -DAVIF_LIBYUV=OFF
+debug:
     cmake --build . --config Debug
     cmake --install . --config Debug
+enddebug:
 release:
     cmake --build . --config Release
     cmake --install . --config Release
@@ -933,8 +982,10 @@ win:
         -DBUILD_SHARED_LIBS=OFF ^
         -DENABLE_DECODER=OFF ^
         -DENABLE_ENCODER=OFF
+debug:
     cmake --build . --config Debug
     cmake --install . --config Debug
+enddebug:
 release:
     cmake --build . --config Release
     cmake --install . --config Release
@@ -955,7 +1006,9 @@ stage('libwebp', """
     git clone -b v1.6.0 https://github.com/webmproject/libwebp.git
     cd libwebp
 win:
+debug:
     nmake /f Makefile.vc CFG=debug-static OBJDIR=out RTLIBCFG=static all
+enddebug:
     nmake /f Makefile.vc CFG=release-static OBJDIR=out RTLIBCFG=static all
     copy out\\release-static\\$X8664\\lib\\libwebp.lib out\\release-static\\$X8664\\lib\\webp.lib
     copy out\\release-static\\$X8664\\lib\\libwebpdemux.lib out\\release-static\\$X8664\\lib\\webpdemux.lib
@@ -1017,8 +1070,10 @@ win:
         -DCMAKE_DISABLE_FIND_PACKAGE_JPEG=TRUE ^
         -DCMAKE_DISABLE_FIND_PACKAGE_PNG=TRUE ^
         -DWITH_EXAMPLES=OFF
+debug:
     cmake --build . --config Debug
     cmake --install . --config Debug
+enddebug:
 release:
     cmake --build . --config Release
     cmake --install . --config Release
@@ -1079,8 +1134,10 @@ win:
         -DCMAKE_C_FLAGS="/DJXL_STATIC_DEFINE /DJXL_THREADS_STATIC_DEFINE /DJXL_CMS_STATIC_DEFINE" ^
         -DCMAKE_CXX_FLAGS="/DJXL_STATIC_DEFINE /DJXL_THREADS_STATIC_DEFINE /DJXL_CMS_STATIC_DEFINE" ^
         %cmake_defines%
+debug:
     cmake --build . --config Debug
     cmake --install . --config Debug
+enddebug:
 release:
     cmake --build . --config Release
     cmake --install . --config Release
@@ -1161,8 +1218,10 @@ stage('liblcms2', """
 win:
 depends:python/Scripts/activate.bat
     %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
+debug:
     meson setup --default-library=static --buildtype=debug -Db_vscrt=mtd out/Debug
     meson compile -C out/Debug
+enddebug:
     meson setup --default-library=static --buildtype=release -Db_vscrt=mt out/Release
     meson compile -C out/Release
     deactivate
@@ -1391,7 +1450,9 @@ win:
         -D ALSOFT_UTILS=OFF ^
         -D ALSOFT_EXAMPLES=OFF ^
         -D ALSOFT_TESTS=OFF
+debug:
     cmake --build build --config Debug
+enddebug:
 release:
     cmake --build build --config RelWithDebInfo
 mac:
@@ -1448,7 +1509,9 @@ depends:python/Scripts/activate.bat
     cd src\\client\\windows
     gyp --no-circular-check breakpad_client.gyp --format=ninja
     cd ..\\..
+debug:
     ninja -C out/Debug%FolderPostfix% common crash_generation_client exception_handler
+enddebug:
 release:
     ninja -C out/Release%FolderPostfix% common crash_generation_client exception_handler
     cd tools\\windows\\dump_syms
@@ -1539,7 +1602,9 @@ win:
     cmake -B out ^
         -DTG_ANGLE_SPECIAL_TARGET=%SPECIAL_TARGET% ^
         -DTG_ANGLE_ZLIB_INCLUDE_PATH=%LIBS_DIR%/zlib
+debug:
     cmake --build out --config Debug
+enddebug:
     if exist out\\CMakeFiles\\tg_angle.dir\\Debug\\tg_angle.pdb copy /y out\\CMakeFiles\\tg_angle.dir\\Debug\\tg_angle.pdb out\\Debug\\
 release:
     cmake --build out --config Release
@@ -1566,6 +1631,8 @@ win:
     SET CONFIGURATIONS=-debug
 release:
     SET CONFIGURATIONS=-debug-and-release
+win_releaseonly:
+    SET CONFIGURATIONS=-release
 win:
     """ + removeDir('"%LIBS_DIR%\\Qt-' + qt + '"') + """
     SET ANGLE_DIR=%LIBS_DIR%\\tg_angle
@@ -1674,6 +1741,8 @@ win:
     SET ASSERTS=
 release:
     SET CONFIGURATIONS=-debug-and-release
+win_releaseonly:
+    SET CONFIGURATIONS=-release
 win_asserts:
     SET ASSERTS=-force-asserts
 win:
@@ -1724,8 +1793,10 @@ win:
         -D LCMS2_INCLUDE_DIR="%LCMS2_DIR%\\include" ^
         -D LCMS2_LIBRARIES="%LCMS2_DIR%\\out\\Release\\src\\liblcms2.a"
 
+debug:
     cmake --build . --config Debug
     cmake --install . --config Debug
+enddebug:
     cmake --build .
     cmake --install .
 """)
@@ -1752,7 +1823,9 @@ win:
         -DTG_OWT_LIBVPX_INCLUDE_PATH=$LIBVPX_PATH \
         -DTG_OWT_OPENH264_INCLUDE_PATH=$OPENH264_PATH \
         -DTG_OWT_FFMPEG_INCLUDE_PATH=$FFMPEG_PATH
+debug:
     cmake --build out --config Debug
+enddebug:
 release:
     cmake --build out --config Release
 mac:
@@ -1837,7 +1910,9 @@ win:
         -D ADA_TOOLS=OFF ^
         -D ADA_INCLUDE_URL_PATTERN=OFF ^
         -D CMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>"
+debug:
     cmake --build out --config Debug
+enddebug:
     cmake --build out --config Release
 mac:
     CFLAGS="$UNGUARDED" CPPFLAGS="$UNGUARDED" cmake -B build . \\
@@ -1860,6 +1935,7 @@ win:
     %THIRDPARTY_DIR%\\msys64\\usr\\bin\\sed -i "s/STREQUAL/MATCHES/" td/generate/CMakeLists.txt
     mkdir out
     cd out
+debug:
     mkdir Debug
     cd Debug
     cmake ^
@@ -1880,8 +1956,11 @@ win:
         -DTD_E2E_ONLY=ON ^
         ../..
     cmake --build . --config Debug
+enddebug:
 release:
+debug:
     cd ..
+enddebug:
     mkdir Release
     cd Release
     cmake ^

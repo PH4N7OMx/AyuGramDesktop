@@ -78,6 +78,8 @@ jobs:
             ${{ runner.temp }}/.mount-cache
           key: ${{ runner.os }}-libs-${{ hashFiles('Telegram/build/docker/centos_env/**') }}
           restore-keys: |
+            ${{ runner.os }}-libs-${{ hashFiles('Telegram/build/docker/centos_env/**') }}-partial-
+            |
             ${{ runner.os }}-libs-
 
       - name: Restore Docker cache mounts
@@ -122,6 +124,7 @@ jobs:
           -v ${{ env.CCACHE_DIR }}:/var/cache/ccache \
           -e CONFIG=Release \
           ${{ env.IMAGE_TAG }} \
+          env -u CCACHE_DISABLE \
           /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
           -D TDESKTOP_API_ID=2040 \
           -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
@@ -455,6 +458,7 @@ jobs:
           $sdk = [regex]::Match($instructions, '\*\*([\d.]+)\*\* SDK version').Groups[1].Value
           if (-not $sdk) { throw 'Windows SDK version is missing from docs/building-win.md.' }
           "sdk=$sdk" >> $env:GITHUB_OUTPUT
+          "CMAKE_BUILD_PARALLEL_LEVEL=$([Math]::Max(1, [Math]::Min(4, [Environment]::ProcessorCount)))" >> $env:GITHUB_ENV
 
       - name: Initialize Visual Studio
         uses: Eden-CI/msvc-dev-cmd@1bd71f95d6f3d1b2b3395b335cc63bcdc90cf223
@@ -469,7 +473,9 @@ jobs:
         with:
           path: ${{ env.ThirdPartyPath }}
           key: windows-2022-x64-tools-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}
-          restore-keys: windows-2022-x64-tools-
+          restore-keys: |
+            windows-2022-x64-tools-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}-partial-
+            windows-2022-x64-tools-
 
       - name: Restore libraries cache
         id: cache-libs
@@ -481,8 +487,10 @@ jobs:
             !${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\*
             !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: windows-2022-x64-libs-${{ steps.configuration.outputs.sdk }}-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}
-          restore-keys: windows-2022-x64-libs-
+          key: windows-2022-x64-release-libs-${{ steps.configuration.outputs.sdk }}-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}
+          restore-keys: |
+            windows-2022-x64-release-libs-${{ steps.configuration.outputs.sdk }}-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}-partial-
+            windows-2022-x64-release-libs-
 
       - name: Restore Qt cache
         id: cache-qt
@@ -491,13 +499,16 @@ jobs:
           path: |
             ${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: windows-2022-x64-qt-${{ steps.configuration.outputs.sdk }}-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}
-          restore-keys: windows-2022-x64-qt-
+          key: windows-2022-x64-release-qt-${{ steps.configuration.outputs.sdk }}-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}
+          restore-keys: |
+            windows-2022-x64-release-qt-${{ steps.configuration.outputs.sdk }}-${{ hashFiles('TBuild/AyuGram/Telegram/build/prepare/**', 'TBuild/AyuGram/Telegram/build/qt_version.py') }}-partial-
+            windows-2022-x64-release-qt-
 
-      - name: Prepare dependencies
+      - name: Prepare tools
+        id: prepare-tools
         shell: cmd
         run: |
-          call Telegram\build\prepare\win.bat silent
+          call Telegram\build\prepare\win.bat silent skip-debug tools-only
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Save tools cache
@@ -506,6 +517,20 @@ jobs:
         with:
           path: ${{ env.ThirdPartyPath }}
           key: ${{ steps.cache-tools.outputs.cache-primary-key }}
+
+      - name: Save partial tools cache
+        if: always() && (steps.prepare-tools.outcome == 'failure' || steps.prepare-tools.outcome == 'cancelled')
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.ThirdPartyPath }}
+          key: ${{ steps.cache-tools.outputs.cache-primary-key }}-partial-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Prepare libraries
+        id: prepare-libs
+        shell: cmd
+        run: |
+          call Telegram\build\prepare\win.bat silent skip-debug libraries-only
+          if errorlevel 1 exit /b %errorlevel%
 
       - name: Save libraries cache
         if: steps.cache-libs.outputs.cache-hit != 'true'
@@ -519,6 +544,25 @@ jobs:
             !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
           key: ${{ steps.cache-libs.outputs.cache-primary-key }}
 
+      - name: Save partial libraries cache
+        if: always() && (steps.prepare-libs.outcome == 'failure' || steps.prepare-libs.outcome == 'cancelled')
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\*
+            !${{ env.LibrariesPath }}\cache_keys
+            !${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\*
+            !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: ${{ steps.cache-libs.outputs.cache-primary-key }}-partial-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Prepare Qt
+        id: prepare-qt
+        shell: cmd
+        run: |
+          call Telegram\build\prepare\win.bat silent skip-debug qt-only
+          if errorlevel 1 exit /b %errorlevel%
+
       - name: Save Qt cache
         if: steps.cache-qt.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -528,17 +572,28 @@ jobs:
             ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
           key: ${{ steps.cache-qt.outputs.cache-primary-key }}
 
+      - name: Save partial Qt cache
+        if: always() && (steps.prepare-qt.outcome == 'failure' || steps.prepare-qt.outcome == 'cancelled')
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: ${{ steps.cache-qt.outputs.cache-primary-key }}-partial-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Configure and build AyuGram
         shell: cmd
         run: |
           cd Telegram
-          call configure.bat x64 ^
+          rem Ninja schedules individual compiler processes under one parallel limit.
+          rem The active x64 Native Tools environment selects the architecture.
+          call configure.bat -G "Ninja Multi-Config" ^
             -D TDESKTOP_API_ID=2040 ^
             -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 ^
             -D CMAKE_CONFIGURATION_TYPES=Release ^
             -D DESKTOP_APP_ENABLE_LTO=OFF
           if errorlevel 1 exit /b %errorlevel%
-          cmake --build ..\out --config Release --target Telegram --parallel 2
+          cmake --build ..\out --config Release --target Telegram --parallel %CMAKE_BUILD_PARALLEL_LEVEL%
           if errorlevel 1 exit /b %errorlevel%
 
       - name: Package Windows binaries
