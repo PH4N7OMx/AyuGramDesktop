@@ -574,6 +574,7 @@ jobs:
             -D TDESKTOP_API_ID=2040 ^
             -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 ^
             -D CMAKE_CONFIGURATION_TYPES=Release ^
+            -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT:STRING= ^
             -D DESKTOP_APP_ENABLE_LTO=OFF
           if errorlevel 1 exit /b %errorlevel%
           cmake --build ..\out --config Release --target Telegram --parallel %CMAKE_BUILD_PARALLEL_LEVEL%
