@@ -589,9 +589,14 @@ jobs:
             Select-Object -First 1
           if (-not $binary) { throw "Application executable was not found in $output." }
           $package = Join-Path $env:RUNNER_TEMP 'AyuGram-Windows\AyuGram'
-          New-Item -ItemType Directory -Path "$package\TelegramForcePortable" -Force | Out-Null
-          New-Item -ItemType File -Path "$package\TelegramForcePortable\.keep" -Force | Out-Null
+          New-Item -ItemType Directory -Path $package -Force | Out-Null
           Copy-Item -LiteralPath $binary -Destination $package
+          $modules = Join-Path $output 'modules'
+          $directXCompiler = Join-Path $modules 'x64\d3d\d3dcompiler_47.dll'
+          if (-not (Test-Path -LiteralPath $directXCompiler -PathType Leaf)) {
+            throw "Required DirectX compiler was not found in $directXCompiler."
+          }
+          Copy-Item -LiteralPath $modules -Destination $package -Recurse
           $updater = Join-Path $output 'Updater.exe'
           if (Test-Path -LiteralPath $updater) {
             Copy-Item -LiteralPath $updater -Destination $package
