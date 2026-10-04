@@ -3,6 +3,8 @@ name: Automatic Release Builder
 on:
   push:
   workflow_dispatch:
+  release:
+    types: [published]
 
 concurrency:
   group: release-build-${{ github.ref }}
@@ -152,6 +154,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
         with:
           files: out/Release/Linux.tar.gz
+          fail_on_unmatched_files: true
 
   build-macos:
     name: Build macOS
@@ -407,12 +410,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
         with:
           files: out/Release/macOS.dmg
+          fail_on_unmatched_files: true
 
   build-windows:
     name: Build Windows x64
     runs-on: windows-2022
     permissions:
-      contents: read
+      contents: write
     timeout-minutes: 360
     env:
       LibrariesPath: ${{ github.workspace }}\TBuild\Libraries\win64
@@ -586,7 +590,7 @@ jobs:
           cmake --build ..\out --config Release --target Telegram --parallel %CMAKE_BUILD_PARALLEL_LEVEL%
           if errorlevel 1 exit /b %errorlevel%
 
-      - name: Package Windows binaries
+      - name: Stage Windows binaries
         run: |
           $output = Join-Path $PWD 'out\Release'
           $binary = @('Telegram.exe', 'AyuGram.exe') |
@@ -607,12 +611,24 @@ jobs:
           if (Test-Path -LiteralPath $updater) {
             Copy-Item -LiteralPath $updater -Destination $package
           }
-          Compress-Archive -LiteralPath $package -DestinationPath "$output\Windows.zip" -Force
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: AyuGram-Windows-x64
-          path: TBuild/AyuGram/out/Release/Windows.zip
+          path: ${{ runner.temp }}/AyuGram-Windows/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Package Windows release asset
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        run: |
+          $package = Join-Path $env:RUNNER_TEMP 'AyuGram-Windows\AyuGram'
+          Compress-Archive -LiteralPath $package -DestinationPath 'out\Release\Windows.zip' -Force
+
+      - name: Upload Windows Asset to Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        with:
+          files: TBuild/AyuGram/out/Release/Windows.zip
+          fail_on_unmatched_files: true
