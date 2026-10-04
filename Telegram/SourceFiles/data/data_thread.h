@@ -81,6 +81,7 @@ public:
 	[[nodiscard]] HistoryUnreadThings::ConstProxy unreadReactions() const;
 	[[nodiscard]] HistoryUnreadThings::Proxy unreadPollVotes();
 	[[nodiscard]] HistoryUnreadThings::ConstProxy unreadPollVotes() const;
+	void refreshMentionsMuted(bool wasMuted);
 	virtual void hasUnreadMentionChanged(bool has) = 0;
 	virtual void hasUnreadReactionChanged(bool has) = 0;
 	virtual void hasUnreadPollVoteChanged(bool has) = 0;

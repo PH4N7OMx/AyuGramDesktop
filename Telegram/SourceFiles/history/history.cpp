@@ -2554,6 +2554,9 @@ int History::chatListNameVersion() const {
 }
 
 void History::hasUnreadMentionChanged(bool has) {
+	if (AyuSettings::getInstance().mentionsDisabled(peer->id.value)) {
+		return;
+	}
 	if (isForum()) {
 		return;
 	}

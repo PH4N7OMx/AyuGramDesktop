@@ -373,6 +373,7 @@ void PickMentionsMuteBox(
 			top->setForceRippled(false);
 		}));
 		top->setForceRippled(true);
+		state->menu->popup(QCursor::pos());
 	});
 }
 

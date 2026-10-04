@@ -153,6 +153,15 @@ const base::flat_set<MsgId> &Thread::unreadPollVotesIds() const {
 	return _unreadThings->pollVotes.ids();
 }
 
+void Thread::refreshMentionsMuted(bool wasMuted) {
+	if (inChatList()) {
+		auto was = chatListUnreadState();
+		was.mentions = wasMuted ? 0 : (unreadMentions().has() ? 1 : 0);
+		notifyUnreadStateChange(was);
+	}
+	updateChatListEntry();
+}
+
 void Thread::clearNotifications() {
 	_notifications.clear();
 }

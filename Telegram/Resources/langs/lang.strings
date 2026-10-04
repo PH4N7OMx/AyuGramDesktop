@@ -9142,10 +9142,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_AyuForwardStatusFinished" = "Done";
 "ayu_AyuForwardStatusSentCount" = "sent {count1} of {count2}";
 "ayu_AyuForwardStatusChunkCount" = "chunk {count1} of {count2}";
+"ayu_CreationDateUserConfirmed" = "{item1} created their account in {item2}.";
 "ayu_CreationDateUserApproximately" = "{item1} created their account approximately {item2}.";
 "ayu_CreationDateUserEarlier" = "**{item1}** created their account earlier than **{item2}**.";
 "ayu_CreationDateUserLater" = "**{item1}** created their account later than **{item2}**.";
 "ayu_CreationDateChat" = "**{item1}** was created on **{item2}**.";
+"ayu_CreationDateSelfConfirmed" = "You created your account in {item}.";
 "ayu_CreationDateSelfApproximately" = "You created your account approximately {item}.";
 "ayu_CreationDateSelfEarlier" = "You created your account earlier than {item}.";
 "ayu_CreationDateSelfLater" = "You created your account later than {item}.";

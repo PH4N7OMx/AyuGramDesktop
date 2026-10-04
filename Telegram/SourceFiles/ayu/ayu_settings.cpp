@@ -18,6 +18,13 @@
 #include "features/filters/filters_cache_controller.h"
 #include "features/translator/ayu_translator.h"
 #include "lang_auto.h"
+#include "data/data_channel.h"
+#include "data/data_changes.h"
+#include "data/data_forum.h"
+#include "data/data_forum_topic.h"
+#include "data/data_session.h"
+#include "history/history.h"
+#include "main/main_account.h"
 #include "main/main_domain.h"
 #include "main/main_session.h"
 #include "platform/platform_translate_provider.h"
@@ -77,6 +84,35 @@ void repaintApp() {
 rpl::lifetime lifetime; // idk reactivity dies when placed in `GhostModeAccountSettings` as field
 
 constexpr auto kMentionsMutedForever = std::numeric_limits<int>::max();
+
+void refreshMentions(uint64 peerId, bool wasMuted) {
+	if (!Core::IsAppLaunched()) {
+		return;
+	}
+	for (const auto &[index, account] : Core::App().domain().accounts()) {
+		const auto session = account->maybeSession();
+		const auto history = session
+			? session->data().historyLoaded(PeerId(peerId))
+			: nullptr;
+		if (!history) {
+			continue;
+		}
+		if (const auto forum = history->peer->forum()) {
+			forum->enumerateTopics([=](not_null<Data::ForumTopic*> topic) {
+				topic->refreshMentionsMuted(wasMuted);
+				session->changes().topicUpdated(
+					topic,
+					Data::TopicUpdate::Flag::UnreadMentions);
+			});
+		} else {
+			history->refreshMentionsMuted(wasMuted);
+		}
+		session->changes().historyUpdated(
+			history,
+			Data::HistoryUpdate::Flag::UnreadMentions);
+	}
+	repaintApp();
+}
 
 } // namespace
 
@@ -395,6 +431,7 @@ void from_json(const nlohmann::json &j, MessageShotSettings &s) {
 AyuSettings::AyuSettings()
 : _appIcon(AyuAssets::DEFAULT_ICON)
 , _editedMark(Core::IsAppLaunched() ? tr::lng_edited(tr::now) : QString("edited")) {
+	_mentionsMuteTimer.setCallback([=] { expireMentionsMutes(); });
 }
 
 AyuSettings &AyuSettings::getInstance() {
@@ -462,6 +499,7 @@ void AyuSettings::load() {
 	}
 
 	settings.validate();
+	settings.scheduleMentionsMuteExpiry();
 
 	if (settings.streamerMode()) {
 		AyuFeatures::StreamerMode::apply(true);
@@ -1218,32 +1256,64 @@ void AyuSettings::setMentionsMutePeriod(uint64 peerId, int period) {
 			int64(kMentionsMutedForever),
 			int64(base::unixtime::now()) + period))
 		: 0;
-	auto &settings = _mentionsSettings[peerId];
-	if (settings.mutedUntil == until) {
-		return;
-	}
-	settings.mutedUntil = until;
-	repaintApp();
-	save();
+	updateMentionsMuteUntil(peerId, until);
 }
 
 void AyuSettings::disableMentionsForever(uint64 peerId) {
-	auto &settings = _mentionsSettings[peerId];
-	if (settings.mutedUntil == kMentionsMutedForever) {
-		return;
-	}
-	settings.mutedUntil = kMentionsMutedForever;
-	repaintApp();
-	save();
+	updateMentionsMuteUntil(peerId, kMentionsMutedForever);
 }
 
 void AyuSettings::enableMentions(uint64 peerId) {
-	const auto i = _mentionsSettings.find(peerId);
-	if (i == _mentionsSettings.end() || !i->second.mutedUntil) {
+	updateMentionsMuteUntil(peerId, 0);
+}
+
+void AyuSettings::updateMentionsMuteUntil(uint64 peerId, int until) {
+	if (mentionsMuteUntil(peerId) == until) {
 		return;
 	}
-	i->second.mutedUntil = 0;
-	repaintApp();
+	const auto wasMuted = mentionsDisabled(peerId);
+	_mentionsSettings[peerId].mutedUntil = until;
+	if (wasMuted != mentionsDisabled(peerId)) {
+		refreshMentions(peerId, wasMuted);
+	}
+	scheduleMentionsMuteExpiry();
+	save();
+}
+
+void AyuSettings::scheduleMentionsMuteExpiry() {
+	_mentionsMuteTimer.cancel();
+	const auto now = base::unixtime::now();
+	auto next = kMentionsMutedForever;
+	for (const auto &[peerId, settings] : _mentionsSettings) {
+		if (settings.mutedUntil > 0
+			&& settings.mutedUntil < kMentionsMutedForever) {
+			next = std::min(next, settings.mutedUntil);
+		}
+	}
+	if (next != kMentionsMutedForever) {
+		_mentionsMuteTimer.callOnce(std::clamp(
+			(int64(next) - now) * 1000,
+			int64(1),
+			int64(24 * 60 * 60 * 1000)));
+	}
+}
+
+void AyuSettings::expireMentionsMutes() {
+	const auto now = base::unixtime::now();
+	auto changed = false;
+	for (auto &[peerId, settings] : _mentionsSettings) {
+		if (settings.mutedUntil > 0
+			&& settings.mutedUntil < kMentionsMutedForever
+			&& settings.mutedUntil <= now) {
+			settings.mutedUntil = 0;
+			refreshMentions(peerId, true);
+			changed = true;
+		}
+	}
+	scheduleMentionsMuteExpiry();
+	if (changed) {
+		save();
+	}
 }
 
 void AyuSettings::setStreamerMode(bool val) {

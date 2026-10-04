@@ -68,6 +68,17 @@ QString AyuLanguage::getCachePath(const QString &langId) const {
 void AyuLanguage::loadCachedLanguage() {
 	const auto langPackId = Lang::GetInstance().id();
 	const auto langPackBaseId = Lang::GetInstance().baseId();
+	auto &language = Lang::GetInstance();
+	language.resetValue("ayu_CreationDateUserConfirmed");
+	language.resetValue("ayu_CreationDateSelfConfirmed");
+	if (langPackId == u"ru"_q || langPackBaseId == u"ru"_q) {
+		language.applyValue(
+			"ayu_CreationDateUserConfirmed",
+			u"**{item1}** создал(а) свой аккаунт **{item2}**."_q.toUtf8());
+		language.applyValue(
+			"ayu_CreationDateSelfConfirmed",
+			u"Вы создали свой аккаунт **{item}**."_q.toUtf8());
+	}
 	auto finalLangPackId = langMapping.contains(langPackId) ? langMapping[langPackId] : langPackId;
 
 	if (finalLangPackId.isEmpty()) {

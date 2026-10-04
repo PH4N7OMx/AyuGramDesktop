@@ -1569,12 +1569,22 @@ void getUserRegistrationDate(not_null<UserData*> user, Fn<void(TextWithEntities)
 		: localEstimate.isValid()
 		? localEstimate
 		: estimateUserRegistrationDate(getBareID(user));
-	const auto formattedDate = langMonthOfYearFull(date.month(), date.year());
+	auto formattedDate = langMonthOfYearFull(date.month(), date.year());
+	if (formattedDate.size() >= 3
+		&& formattedDate.endsWith(u"г."_q)
+		&& formattedDate.at(formattedDate.size() - 3).isSpace()) {
+		formattedDate.chop(2);
+		formattedDate += u"года"_q;
+	}
 
 	TextWithEntities regResult;
-	if (confirmed.isValid()) {
-		regResult.text = tr::lng_new_contact_registration(tr::now)
-			+ u": "_q + formattedDate + u" (Telegram)"_q;
+	if (confirmed.isValid() && user->isSelf()) {
+		regResult = tr::ayu_CreationDateSelfConfirmed(
+			tr::now, lt_item, TextWithEntities{ formattedDate }, tr::rich);
+	} else if (confirmed.isValid()) {
+		regResult = tr::ayu_CreationDateUserConfirmed(
+			tr::now, lt_item1, TextWithEntities{ user->name() },
+			lt_item2, TextWithEntities{ formattedDate }, tr::rich);
 	} else if (user->isSelf()) {
 		regResult = tr::ayu_CreationDateSelfApproximately(
 			tr::now, lt_item, TextWithEntities{ formattedDate }, tr::rich);
@@ -1582,6 +1592,14 @@ void getUserRegistrationDate(not_null<UserData*> user, Fn<void(TextWithEntities)
 		regResult = tr::ayu_CreationDateUserApproximately(
 			tr::now, lt_item1, TextWithEntities{ user->name() },
 			lt_item2, TextWithEntities{ formattedDate }, tr::rich);
+	}
+
+	if (formattedDate.endsWith(QChar('.'))
+		&& regResult.text.endsWith(u".."_q)) {
+		regResult.text.chop(1);
+		for (auto &entity : regResult.entities) {
+			entity.updateTextEnd(regResult.text.size());
+		}
 	}
 
 	if (contextPeer && contextPeer != user) {

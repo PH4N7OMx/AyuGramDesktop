@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "data/data_forum_topic.h"
 
+#include "ayu/ayu_settings.h"
 #include "data/data_channel.h"
 #include "data/data_changes.h"
 #include "data/data_forum.h"
@@ -931,7 +932,9 @@ Dialogs::UnreadState ForumTopic::unreadStateFor(
 	const auto muted = this->muted();
 	result.messages = count;
 	result.chats = count ? 1 : 0;
-	result.mentions = unreadMentions().has() ? 1 : 0;
+	const auto hideMentions = AyuSettings::getInstance().mentionsDisabled(
+		peer()->id.value);
+	result.mentions = hideMentions ? 0 : (unreadMentions().has() ? 1 : 0);
 	result.reactions = unreadReactions().has() ? 1 : 0;
 	result.messagesMuted = muted ? result.messages : 0;
 	result.chatsMuted = muted ? result.chats : 0;
@@ -969,6 +972,9 @@ const base::flat_set<QChar> &ForumTopic::chatListFirstLetters() const {
 }
 
 void ForumTopic::hasUnreadMentionChanged(bool has) {
+	if (AyuSettings::getInstance().mentionsDisabled(peer()->id.value)) {
+		return;
+	}
 	auto was = chatListUnreadState();
 	if (has) {
 		was.mentions = 0;

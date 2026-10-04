@@ -8,6 +8,7 @@
 
 #include "ayu/libs/json.hpp"
 #include "ayu/libs/json_ext.hpp"
+#include "base/timer.h"
 #include "rpl/lifetime.h"
 #include "rpl/producer.h"
 #include "rpl/variable.h"
@@ -658,6 +659,9 @@ public:
 
 private:
 	AyuSettings();
+	void updateMentionsMuteUntil(uint64 peerId, int until);
+	void scheduleMentionsMuteExpiry();
+	void expireMentionsMutes();
 
 	[[nodiscard]] uint64 getOverriddenGhostUserId(uint64 userId) const { return _useGlobalGhostMode.current() ? 0 : userId; }
 
@@ -674,6 +678,7 @@ private:
 	rpl::variable<bool> _filtersEnabledInPrivate = true;
 	rpl::variable<bool> _hideFromBlocked = false;
 	rpl::variable<bool> _collapseDuplicates = true;
+	base::Timer _mentionsMuteTimer;
 	std::unordered_map<uint64, MentionsSettings> _mentionsSettings;
 	rpl::variable<bool> _semiTransparentDeletedMessages = false;
 	rpl::variable<bool> _disableAds = true;

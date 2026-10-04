@@ -24,8 +24,10 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Patch codegen scanner for ayu_ prefix
-        run: python3 Telegram/build/patch_codegen.py
+      - name: Patch codegen and syntax highlighting
+        run: |
+          python3 Telegram/build/patch_codegen.py
+          python3 Telegram/build/patch_prisma.py
 
       - name: Patch tgcalls CryptoHelper for Xcode 16 / Clang
         run: |
@@ -334,8 +336,10 @@ jobs:
           cp include/tlottie.h "$LibrariesPath/local/include/tlottie/tlottie.h"
           cp include/tlottie.h "$LibrariesPath/local/include/tlottie.h"
 
-      - name: Patch codegen scanner for ayu_ prefix
-        run: python3 Telegram/build/patch_codegen.py
+      - name: Patch codegen and syntax highlighting
+        run: |
+          python3 Telegram/build/patch_codegen.py
+          python3 Telegram/build/patch_prisma.py
 
       - name: Patch tgcalls CryptoHelper for Xcode 16 / Clang
         run: |
@@ -431,8 +435,10 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Patch codegen scanner for ayu_ prefix
-        run: python Telegram/build/patch_codegen.py
+      - name: Patch codegen and syntax highlighting
+        run: |
+          python Telegram/build/patch_codegen.py
+          python Telegram/build/patch_prisma.py
 
       - name: Read build configuration
         id: configuration

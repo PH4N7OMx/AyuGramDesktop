@@ -190,6 +190,7 @@ base::flat_set<FullMsgId> removingDuplicates;
 [[nodiscard]] bool IsDuplicateCandidate(
 		not_null<const HistoryItem*> item) {
 	return DuplicateCollapsingEnabled(item)
+		&& item->isRegular()
 		&& !IsRemoving(item)
 		&& !item->isService()
 		&& (item->id > 0)
@@ -199,6 +200,17 @@ base::flat_set<FullMsgId> removingDuplicates;
 [[nodiscard]] bool SameDuplicateContent(
 		not_null<const HistoryItem*> first,
 		not_null<const HistoryItem*> second) {
+	const auto firstForward = first->Get<HistoryMessageForwarded>();
+	const auto secondForward = second->Get<HistoryMessageForwarded>();
+	if ((firstForward != nullptr) != (secondForward != nullptr)) {
+		return false;
+	}
+	if (firstForward
+		&& (!first->originalSender()
+			|| first->originalSender() != second->originalSender()
+			|| first->originalPostAuthor() != second->originalPostAuthor())) {
+		return false;
+	}
 	return first->from() == second->from()
 		&& first->originalText() == second->originalText()
 		&& first->replyTo() == second->replyTo();
@@ -212,6 +224,7 @@ base::flat_set<FullMsgId> removingDuplicates;
 		const auto candidate = entry.get();
 		if (candidate == item.get()
 			|| candidate->id <= 0
+			|| !candidate->isRegular()
 			|| IsRemoving(candidate)
 			|| candidate->isService()) {
 			continue;
@@ -245,7 +258,10 @@ base::flat_set<FullMsgId> removingDuplicates;
 			break;
 		}
 		const auto adjacent = owner.message(peerId, id);
-		if (!adjacent || IsRemoving(adjacent) || adjacent->isService()) {
+		if (!adjacent
+			|| !adjacent->isRegular()
+			|| IsRemoving(adjacent)
+			|| adjacent->isService()) {
 			continue;
 		}
 		return adjacent;
@@ -340,7 +356,7 @@ int countDuplicateGroupSize(const not_null<HistoryItem*> item) {
 void handleDuplicateItemRemoved(not_null<const HistoryItem*> item) {
 	const auto itemId = item->fullId();
 	notifiedDuplicates.remove(itemId);
-	if (!DuplicateCollapsingEnabled(item)) {
+	if (!item->isRegular() || !DuplicateCollapsingEnabled(item)) {
 		return;
 	}
 
