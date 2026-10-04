@@ -1,0 +1,101 @@
+name: Publish Latest Push Build
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: publish-release-${{ github.event.release.id }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Attach latest dev build
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Find latest push build and wait for completion
+        id: build
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: 'release.yml',
+              branch: 'dev',
+              event: 'push',
+              created: `<=${context.payload.release.published_at}`,
+              per_page: 1,
+            });
+            let run = data.workflow_runs[0];
+            if (!run) {
+              throw new Error('No push build for dev was found before this release was published.');
+            }
+            core.info(`Using build ${run.html_url} for commit ${run.head_sha}.`);
+            const deadline = Date.now() + 340 * 60 * 1000;
+            while (run.status !== 'completed') {
+              if (Date.now() >= deadline) {
+                throw new Error(`Build did not finish in time: ${run.html_url}`);
+              }
+              await new Promise(resolve => setTimeout(resolve, 30000));
+              ({ data: run } = await github.rest.actions.getWorkflowRun({
+                owner,
+                repo,
+                run_id: run.id,
+              }));
+            }
+            if (run.conclusion !== 'success') {
+              throw new Error(`Latest push build ended with ${run.conclusion}: ${run.html_url}`);
+            }
+            core.setOutput('run-id', String(run.id));
+            await core.summary
+              .addHeading('Release build')
+              .addLink(`dev: ${run.head_sha}`, run.html_url)
+              .write();
+
+      - name: Download Linux package
+        uses: actions/download-artifact@v4
+        with:
+          name: AyuGram-Linux
+          path: release-assets
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.build.outputs.run-id }}
+
+      - name: Download macOS package
+        uses: actions/download-artifact@v4
+        with:
+          name: AyuGram-macOS
+          path: release-assets
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.build.outputs.run-id }}
+
+      - name: Download Windows binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: AyuGram-Windows-x64
+          path: windows-package
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.build.outputs.run-id }}
+
+      - name: Package Windows release asset
+        working-directory: windows-package
+        run: |
+          test -f AyuGram/Telegram.exe || test -f AyuGram/AyuGram.exe
+          test -f AyuGram/modules/x64/d3d/d3dcompiler_47.dll
+          zip -r ../release-assets/Windows.zip AyuGram
+
+      - name: Upload packages to the published release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            release-assets/Linux.tar.gz
+            release-assets/macOS.dmg
+            release-assets/Windows.zip
+          fail_on_unmatched_files: true
