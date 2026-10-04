@@ -14,6 +14,7 @@
 #include "rpl/variable.h"
 
 #include <map>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -678,7 +679,7 @@ private:
 	rpl::variable<bool> _filtersEnabledInPrivate = true;
 	rpl::variable<bool> _hideFromBlocked = false;
 	rpl::variable<bool> _collapseDuplicates = true;
-	base::Timer _mentionsMuteTimer;
+	std::unique_ptr<base::Timer> _mentionsMuteTimer;
 	std::unordered_map<uint64, MentionsSettings> _mentionsSettings;
 	rpl::variable<bool> _semiTransparentDeletedMessages = false;
 	rpl::variable<bool> _disableAds = true;

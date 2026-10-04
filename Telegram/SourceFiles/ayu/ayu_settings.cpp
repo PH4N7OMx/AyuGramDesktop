@@ -431,7 +431,9 @@ void from_json(const nlohmann::json &j, MessageShotSettings &s) {
 AyuSettings::AyuSettings()
 : _appIcon(AyuAssets::DEFAULT_ICON)
 , _editedMark(Core::IsAppLaunched() ? tr::lng_edited(tr::now) : QString("edited")) {
-	_mentionsMuteTimer.setCallback([=] { expireMentionsMutes(); });
+	_mentionsMuteTimer = std::make_unique<base::Timer>([] {
+		getInstance().expireMentionsMutes();
+	});
 }
 
 AyuSettings &AyuSettings::getInstance() {
@@ -1281,7 +1283,7 @@ void AyuSettings::updateMentionsMuteUntil(uint64 peerId, int until) {
 }
 
 void AyuSettings::scheduleMentionsMuteExpiry() {
-	_mentionsMuteTimer.cancel();
+	_mentionsMuteTimer->cancel();
 	const auto now = base::unixtime::now();
 	auto next = kMentionsMutedForever;
 	for (const auto &[peerId, settings] : _mentionsSettings) {
@@ -1291,7 +1293,7 @@ void AyuSettings::scheduleMentionsMuteExpiry() {
 		}
 	}
 	if (next != kMentionsMutedForever) {
-		_mentionsMuteTimer.callOnce(std::clamp(
+		_mentionsMuteTimer->callOnce(std::clamp(
 			(int64(next) - now) * 1000,
 			int64(1),
 			int64(24 * 60 * 60 * 1000)));
